@@ -55,16 +55,16 @@ export default function ClockSkin({ percentage }: ClockSkinProps) {
         const radius = 70;
         const x = 100 + radius * Math.sin(angle);
         const y = 100 - radius * Math.cos(angle);
-        
+
         return (
           <text
             key={i}
-            x={x}
-            y={y}
+            x={Number(x.toFixed(2))}
+            y={Number(y.toFixed(2))}
             textAnchor="middle"
             dominantBaseline="middle"
             className="fill-[#3d2817] dark:fill-[#d4c5b0]"
-            style={{ 
+            style={{
               fontSize: i === 0 || i === 6 ? '16px' : '14px',
               fontFamily: 'Georgia, serif',
               fontWeight: '500'
@@ -79,11 +79,11 @@ export default function ClockSkin({ percentage }: ClockSkinProps) {
       {[...Array(60)].map((_, i) => {
         if (i % 5 === 0) return null;
         const angle = (i * 6 - 90) * (Math.PI / 180);
-        const x1 = 100 + 80 * Math.cos(angle);
-        const y1 = 100 + 80 * Math.sin(angle);
-        const x2 = 100 + 83 * Math.cos(angle);
-        const y2 = 100 + 83 * Math.sin(angle);
-        
+        const x1 = Number((100 + 80 * Math.cos(angle)).toFixed(2));
+        const y1 = Number((100 + 80 * Math.sin(angle)).toFixed(2));
+        const x2 = Number((100 + 83 * Math.cos(angle)).toFixed(2));
+        const y2 = Number((100 + 83 * Math.sin(angle)).toFixed(2));
+
         return (
           <line
             key={i}

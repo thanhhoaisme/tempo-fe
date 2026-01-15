@@ -5,12 +5,14 @@ import { AppProvider } from "@/context/AppContext";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   // Pages without sidebar and topbar
-  const authPages = ['/login', '/register'];
+  const authPages = ['/login', '/register', '/forgot-password'];
   const isAuthPage = authPages.includes(pathname);
 
   if (isAuthPage) {
@@ -22,8 +24,8 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#E8DEFF] dark:bg-[#1A1A2E]">
-      <Sidebar />
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 dark:from-[#16162A] dark:via-[#16162A] dark:to-[#1A1A2E]">
+      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar />
         <main className="flex-1 overflow-y-auto p-6">

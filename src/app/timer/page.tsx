@@ -1,6 +1,6 @@
 'use client';
 
-import { Play, Pause, RotateCcw, Coffee } from 'lucide-react';
+import { Play, Pause, RotateCcw, Coffee, Clock } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import Toast from '@/components/features/Toast';
@@ -146,7 +146,8 @@ export default function TimerPage() {
 
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-3">
+            <Clock className="text-purple-600" size={28} />
             Focus Timer
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">Stay focused with Pomodoro technique</p>

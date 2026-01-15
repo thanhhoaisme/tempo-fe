@@ -1,11 +1,16 @@
 'use client';
 
-import { User, Mail, Lock, Save } from 'lucide-react';
+import { Mail, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import Toast from '@/components/features/Toast';
+import PasswordStrength from '@/components/features/PasswordStrength';
 
 export default function ProfilePage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState(0);
   const [profileData, setProfileData] = useState({
     name: 'John Doe',
     email: 'john.doe@example.com',
@@ -28,8 +33,12 @@ export default function ProfilePage() {
       setToast({ message: 'Passwords do not match!', type: 'error' });
       return;
     }
-    if (passwordData.newPassword.length < 6) {
-      setToast({ message: 'Password must be at least 6 characters!', type: 'error' });
+    if (passwordData.newPassword.length < 8) {
+      setToast({ message: 'Password must be at least 8 characters!', type: 'error' });
+      return;
+    }
+    if (passwordStrength < 2) {
+      setToast({ message: 'Password is too weak. Please choose a stronger password.', type: 'error' });
       return;
     }
     // TODO: Call API to change password
@@ -50,8 +59,7 @@ export default function ProfilePage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <User className="text-purple-600" size={28} />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Profile
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
@@ -84,14 +92,9 @@ export default function ProfilePage() {
 
           {/* Edit Profile Section */}
           <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-xl">
-                <User size={20} className="text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Personal Information</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Update your name and email</p>
-              </div>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Personal Information</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Update your name and email</p>
             </div>
 
             <form onSubmit={handleProfileUpdate} className="space-y-4">
@@ -126,9 +129,8 @@ export default function ProfilePage() {
 
               <button
                 type="submit"
-                className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors"
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors"
               >
-                <Save size={18} />
                 Save Changes
               </button>
             </form>
@@ -136,14 +138,9 @@ export default function ProfilePage() {
 
           {/* Change Password Section */}
           <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                <Lock size={20} className="text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Change Password</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Update your password</p>
-              </div>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Change Password</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Update your password</p>
             </div>
 
             <form onSubmit={handlePasswordChange} className="space-y-4">
@@ -151,27 +148,49 @@ export default function ProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Current Password
                 </label>
-                <input
-                  type="password"
-                  value={passwordData.currentPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1A1A2E] border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
-                  placeholder="Enter current password"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                    className="w-full px-4 py-3 pr-12 bg-gray-50 dark:bg-[#1A1A2E] border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+                    placeholder="Enter current password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  >
+                    {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   New Password
                 </label>
-                <input
-                  type="password"
-                  value={passwordData.newPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1A1A2E] border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
-                  placeholder="Enter new password"
-                  required
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                    className="w-full px-4 py-3 pr-12 bg-gray-50 dark:bg-[#1A1A2E] border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+                    placeholder="Enter new password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <PasswordStrength 
+                  password={passwordData.newPassword} 
+                  onStrengthChange={setPasswordStrength}
                 />
               </div>
 
@@ -179,21 +198,29 @@ export default function ProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Confirm New Password
                 </label>
-                <input
-                  type="password"
-                  value={passwordData.confirmPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1A1A2E] border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
-                  placeholder="Confirm new password"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                    className="w-full px-4 py-3 pr-12 bg-gray-50 dark:bg-[#1A1A2E] border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+                    placeholder="Confirm new password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <button
                 type="submit"
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors"
               >
-                <Lock size={18} />
                 Update Password
               </button>
             </form>

@@ -16,6 +16,9 @@ interface AppContextType {
   addJournalEntry: (entry: JournalEntry) => void;
   updateJournalEntry: (id: string, updates: Partial<JournalEntry>) => void;
   habits: any[];
+  addHabit: (habit: any) => void;
+  updateHabit: (id: string, updates: any) => void;
+  deleteHabit: (id: string) => void;
   updateHabitCompletion: (habitId: string, date: Date, completed: boolean) => void;
   tasks: Task[];
   projects: Project[];
@@ -28,6 +31,7 @@ interface AppContextType {
   ownedSkins: string[];
   activeSkin: string | null;
   purchaseSkin: (skinId: string, price: number) => void;
+  purchaseItem: (itemId: string, price: number) => void;
   activateSkin: (skinId: string) => void;
   // Streak rewards
   earnCoins: (amount: number) => void;
@@ -40,38 +44,61 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>({
     id: '1',
-    username: 'User',
+    username: 'johndoe',
+    fullName: 'John Doe',
+    email: 'john.doe@example.com',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
     coins: 1000,
     totalXP: 2500,
     level: 12,
     theme: 'light',
     timerAnimation: 'coffee',
+    inventory: {},
+    currentStreak: 0,
+    lastActiveDate: '',
   });
 
   const [currentSession, setCurrentSession] = useState<TimerSession | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+
+  // Initial habits with empty completions (will be overwritten by localStorage if exists)
   const [habits, setHabits] = useState<any[]>([
     {
       id: '1',
-      name: 'Morning Exercise',
-      icon: '🏃',
+      name: 'Drink 2L Water',
+      icon: '💧',
+      category: 'Health',
+      reminderTime: '8:00 AM',
       completions: {},
-      createdAt: Date.now(),
+      createdAt: 1704067200000, // Fixed timestamp
     },
     {
       id: '2',
-      name: 'Read 30 minutes',
-      icon: '📚',
+      name: 'Read 10 pages',
+      icon: '📖',
+      category: 'Learning',
+      reminderTime: '7:00 AM',
       completions: {},
-      createdAt: Date.now(),
+      createdAt: 1704067200000,
     },
     {
       id: '3',
+      name: '30 min workout',
+      icon: '💪',
+      category: 'Fitness',
+      reminderTime: '6:00 AM',
+      completions: {},
+      createdAt: 1704067200000,
+    },
+    {
+      id: '4',
       name: 'Meditation',
       icon: '🧘',
+      category: 'Wellness',
+      reminderTime: '9:00 AM',
       completions: {},
-      createdAt: Date.now(),
+      createdAt: 1704067200000,
     },
   ]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -114,7 +141,74 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (savedTasks) setTasksState(JSON.parse(savedTasks));
     if (savedProjects) setProjectsState(JSON.parse(savedProjects));
     if (savedClaimedRewards) setClaimedRewards(JSON.parse(savedClaimedRewards));
-  }, []);
+    if (savedClaimedRewards) setClaimedRewards(JSON.parse(savedClaimedRewards));
+
+    // Check Streak Logic
+    checkStreak();
+  }, []); // Remove profile dependency to avoid infinite loop if checkStreak updates profile
+
+  const checkStreak = () => {
+    // We need to access the LATEST profile from localStorage because state might be stale on mount
+    const saved = localStorage.getItem('profile');
+    if (!saved) return;
+
+    const currentProfile: UserProfile = JSON.parse(saved);
+    if (!currentProfile.lastActiveDate) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastActive = new Date(currentProfile.lastActiveDate);
+    lastActive.setHours(0, 0, 0, 0);
+
+    const diffTime = today.getTime() - lastActive.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 1) return; // Active today (0) or yesterday (1) -> Safe
+
+    // Missed days exist
+    const missedDays = diffDays - 1;
+    const freezesOwned = currentProfile.inventory?.['streak-freeze'] || 0;
+
+    if (freezesOwned >= missedDays) {
+      // Protected by freeze
+      const newInventory = { ...currentProfile.inventory };
+      newInventory['streak-freeze'] -= missedDays;
+
+      // We set lastActiveDate to "yesterday" to bridge the gap so they can continue streak today
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      updateProfile({
+        inventory: newInventory,
+        lastActiveDate: yesterday.toISOString().split('T')[0]
+      });
+      // Ideally notify user here
+      console.log(`Streak protected! Used ${missedDays} freeze(s).`);
+    } else {
+      // Reset streak
+      updateProfile({ currentStreak: 0 });
+      console.log('Streak reset due to inactivity.');
+    }
+  };
+
+  const recordActivity = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (profile.lastActiveDate !== todayStr) {
+      // First activity of the day
+      // Check if we are continuing a streak (lastActive was yesterday) or starting new (if reset happened)
+      // Actually checkStreak() handles the reset logic on load.
+      // So if we are here, and streak wasn't 0 (unless we just reset it), we increment?
+      // Wait, if I missed a week, checkStreak reset it to 0. 
+      // Then recordActivity sets it to 1. Correct.
+      // If I was active yesterday, checkStreak did nothing. Streak is N.
+      // recordActivity sets it to N+1. Correct.
+
+      updateProfile({
+        lastActiveDate: todayStr,
+        currentStreak: (profile.currentStreak || 0) + 1
+      });
+    }
+  };
 
   const updateProfile = (updates: Partial<UserProfile>) => {
     setProfile((prev) => {
@@ -183,6 +277,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return habit;
       });
+
+      if (completed) {
+        recordActivity();
+      }
+
+      localStorage.setItem('habits', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const addHabit = (habit: any) => {
+    setHabits((prev) => {
+      const updated = [...prev, habit];
+      localStorage.setItem('habits', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const updateHabit = (id: string, updates: any) => {
+    setHabits((prev) => {
+      const updated = prev.map((habit) =>
+        habit.id === id ? { ...habit, ...updates } : habit
+      );
+      localStorage.setItem('habits', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const deleteHabit = (id: string) => {
+    setHabits((prev) => {
+      const updated = prev.filter((habit) => habit.id !== id);
       localStorage.setItem('habits', JSON.stringify(updated));
       return updated;
     });
@@ -221,6 +346,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const updated = [...prev, skinId];
         localStorage.setItem('ownedSkins', JSON.stringify(updated));
         return updated;
+      });
+    }
+  };
+
+  const purchaseItem = (itemId: string, price: number) => {
+    if (profile.coins >= price) {
+      updateProfile({
+        coins: profile.coins - price,
+        inventory: {
+          ...(profile.inventory || {}),
+          [itemId]: ((profile.inventory || {})[itemId] || 0) + 1,
+        },
       });
     }
   };
@@ -275,6 +412,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addJournalEntry,
         updateJournalEntry,
         habits,
+        addHabit,
+        updateHabit,
+        deleteHabit,
         updateHabitCompletion,
         calendarEvents,
         addCalendarEvent,
@@ -283,6 +423,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ownedSkins,
         activeSkin,
         purchaseSkin,
+        purchaseItem,
         activateSkin,
         tasks,
         projects,

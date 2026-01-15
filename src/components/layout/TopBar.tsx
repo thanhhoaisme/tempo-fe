@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, User, Settings, LogOut } from 'lucide-react';
+import { Bell, User, Settings, LogOut, Search, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +16,7 @@ const mockNotifications = [
     type: 'success'
   },
   {
-    id: '2', 
+    id: '2',
     title: 'Reminder',
     message: 'Don\'t forget to complete your IELTS practice',
     time: '15 min ago',
@@ -38,7 +38,15 @@ const mockNotifications = [
     time: '3 hours ago',
     read: true,
     type: 'info'
-  }
+  },
+  {
+    id: '5',
+    title: 'Timer session complete!',
+    message: 'You completed a 25-minute focus session',
+    time: '5 hours ago',
+    read: true,
+    type: 'success'
+  },
 ];
 
 export default function TopBar() {
@@ -68,37 +76,50 @@ export default function TopBar() {
   };
 
   return (
-    <div className="h-14 bg-[#E8DEFF] dark:bg-[#1A1A2E] flex items-center justify-between px-6">  
-      <div className="flex-1" />
+    <div className="h-16 bg-white dark:bg-[#1A1A2E] flex items-center justify-between px-6 border-b border-gray-100 dark:border-gray-700">
+      {/* Search Bar - Center */}
+      <div className="flex-1 max-w-2xl mx-auto">
+        <div className="relative flex items-center gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="w-full pl-12 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+            />
+          </div>
+          <button className="p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <SlidersHorizontal size={20} className="text-gray-600 dark:text-gray-400" />
+          </button>
+        </div>
+      </div>
 
       {/* Right actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4 ml-6">
         {/* Notifications */}
         <div className="relative">
-          <button 
+          <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 hover:bg-white/50 dark:hover:bg-white/10 rounded-xl transition-colors relative"
+            className="p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors relative"
           >
             <Bell size={20} className="text-gray-600 dark:text-gray-400" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-medium">
-                {unreadCount}
-              </span>
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
             )}
           </button>
 
           {/* Notifications Dropdown */}
           {showNotifications && (
             <>
-              <div 
+              <div
                 className="fixed inset-0 z-40"
                 onClick={() => setShowNotifications(false)}
               />
-              <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-[#252540] rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-[#252540] rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-600 z-50 overflow-hidden">
                 <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Notifications</h3>
                   {unreadCount > 0 && (
-                    <button 
+                    <button
                       onClick={markAllAsRead}
                       className="text-xs text-purple-600 dark:text-purple-400 hover:underline"
                     >
@@ -106,7 +127,7 @@ export default function TopBar() {
                     </button>
                   )}
                 </div>
-                <div className="max-h-80 overflow-y-auto">
+                <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
                   {notifications.length === 0 ? (
                     <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
                       No notifications
@@ -116,9 +137,8 @@ export default function TopBar() {
                       <div
                         key={notification.id}
                         onClick={() => markAsRead(notification.id)}
-                        className={`p-3 border-b border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-                          !notification.read ? 'bg-purple-50 dark:bg-purple-900/20' : ''
-                        }`}
+                        className={`p-3 border-b border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${!notification.read ? 'bg-purple-50 dark:bg-purple-900/20' : ''
+                          }`}
                       >
                         <div className="flex gap-3">
                           <div className={`w-2 h-2 rounded-full mt-2 ${getTypeColor(notification.type)}`} />
@@ -147,29 +167,34 @@ export default function TopBar() {
         <div className="relative">
           <button
             onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="flex items-center gap-3 pl-3 ml-1 border-l border-purple-200 dark:border-purple-800 hover:opacity-80 transition-opacity"
+            className="flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl px-3 py-2 transition-colors"
           >
-            <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-sm">
-              <img 
-                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face" 
+            <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-purple-400 to-pink-400">
+              <img
+                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face"
                 alt="Profile"
                 className="w-full h-full object-cover"
               />
             </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">@leonard_b</p>
+            </div>
+            <ChevronDown size={16} className="text-gray-400" />
           </button>
 
           {/* Profile Dropdown */}
           {showProfileMenu && (
             <>
-              <div 
+              <div
                 className="fixed inset-0 z-40"
                 onClick={() => setShowProfileMenu(false)}
               />
-              <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-[#252540] rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-[#252540] rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-600 z-50 overflow-hidden">
                 {/* User Info */}
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                  <p className="font-semibold text-gray-900 dark:text-white text-sm">John Doe</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">john.doe@example.com</p>
+                  <p className="font-semibold text-gray-900 dark:text-white text-sm">@johndoe</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">John Doe</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">john.doe@example.com</p>
                 </div>
 
                 {/* Menu Items */}

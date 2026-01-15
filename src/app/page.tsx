@@ -1,10 +1,10 @@
 'use client';
 
 import { useApp } from '@/context/AppContext';
-import { AlertTriangle, Flame, CheckCircle2, Clock, ListTodo, Target, Calendar, ChevronRight, Gift, Coins } from 'lucide-react';
+import { Flame, CheckCircle2, Clock, Target, Calendar, ChevronRight, Activity, Lock, Trophy, Star, Gift, Coins, Plus } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Task } from '@/types';
+import StatCard from '@/components/dashboard/StatCard';
 
 interface HabitStreak {
   completed: number;
@@ -21,27 +21,44 @@ interface TaskStats {
   overdue: number;
 }
 
+interface Quote {
+  q: string;
+  a: string;
+  h: string;
+}
+
 type TimePeriod = 'week' | 'month';
 
+// Category colors mapping
+const categoryColors: Record<string, string> = {
+  'Health': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  'Learning': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  'Fitness': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  'Wellness': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  'Work': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  'Personal': 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
+};
+
 export default function Home() {
-  const { habits, profile, tasks, projects, claimedRewards, claimReward } = useApp();
+  const { habits, profile, tasks, calendarEvents, updateHabitCompletion, claimedRewards, claimReward } = useApp();
   const router = useRouter();
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('week');
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(true);
   const [streakStats, setStreakStats] = useState<HabitStreak>({
     completed: 0,
     missed: 0,
     total: 0,
     currentStreak: 0,
   });
-  const [weeklyData, setWeeklyData] = useState<{ day: number; completed: number; missed: number }[]>([]);
-  const [rewardMessage, setRewardMessage] = useState<string | null>(null);
 
-  // Streak milestone rewards
-  const streakRewards = [
-    { id: 'streak-7', days: 7, coins: 50, label: '1 Week' },
-    { id: 'streak-14', days: 14, coins: 100, label: '2 Weeks' },
-    { id: 'streak-28', days: 28, coins: 200, label: '4 Weeks' },
-  ];
+  // Get greeting based on time of day
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
 
   // Calculate task statistics
   const taskStats: TaskStats = useMemo(() => {
@@ -56,21 +73,6 @@ export default function Home() {
     };
   }, [tasks]);
 
-  // Get upcoming tasks (due in next 7 days)
-  const upcomingTasks = useMemo(() => {
-    const today = new Date();
-    const nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 7);
-
-    const todayStr = today.toISOString().split('T')[0];
-    const nextWeekStr = nextWeek.toISOString().split('T')[0];
-
-    return tasks
-      .filter(t => t.dueDate && t.dueDate >= todayStr && t.dueDate <= nextWeekStr && t.status !== 'Done')
-      .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
-      .slice(0, 5);
-  }, [tasks]);
-
   // Get today's habit completion
   const todayHabits = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -81,6 +83,45 @@ export default function Home() {
   }, [habits]);
 
   const habitsCompletedToday = todayHabits.filter(h => h.completedToday).length;
+
+  // Generate recent activities from calendar events and timer sessions
+  const recentActivities = useMemo(() => {
+    const activities: { id: string; text: string; time: string; type: 'timer' | 'calendar' | 'habit' }[] = [];
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+
+    // Get today's calendar events (most recent first)
+    const todayEvents = calendarEvents
+      .filter(event => {
+        const eventStart = new Date(event.startTime);
+        return eventStart >= todayStart && eventStart <= now;
+      })
+      .sort((a, b) => b.startTime - a.startTime)
+      .slice(0, 6);
+
+    todayEvents.forEach((event) => {
+      const eventTime = new Date(event.startTime);
+      const diffMinutes = Math.floor((now.getTime() - eventTime.getTime()) / (1000 * 60));
+      let timeStr = '';
+
+      if (diffMinutes < 60) {
+        timeStr = `${diffMinutes} min ago`;
+      } else {
+        const diffHours = Math.floor(diffMinutes / 60);
+        timeStr = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      }
+
+      activities.push({
+        id: event.id,
+        text: event.title,
+        time: timeStr,
+        type: event.createdFromTimer ? 'timer' : 'calendar',
+      });
+    });
+
+    return activities;
+  }, [calendarEvents]);
 
   useEffect(() => {
     const days = timePeriod === 'week' ? 7 : 30;
@@ -121,451 +162,352 @@ export default function Home() {
       total: completed + missed,
       currentStreak,
     });
-
-    // Generate chart data
-    const chartDays = timePeriod === 'week' ? 7 : 15;
-    const lastChartDays = Array.from({ length: chartDays }, (_, i) => {
-      const d = new Date(today);
-      d.setDate(d.getDate() - (chartDays - 1 - i));
-      return d;
-    });
-
-    const data = lastChartDays.map((date) => {
-      const dateKey = date.toISOString().split('T')[0];
-      let dayCompleted = 0;
-      let dayMissed = 0;
-
-      habits.forEach((habit: any) => {
-        if (habit.completions && habit.completions[dateKey]) {
-          dayCompleted++;
-        } else {
-          dayMissed++;
-        }
-      });
-
-      return {
-        day: date.getDate(),
-        completed: habits.length > 0 ? (dayCompleted / habits.length) * 100 : 0,
-        missed: habits.length > 0 ? (dayMissed / habits.length) * 100 : 0,
-      };
-    });
-
-    setWeeklyData(data);
   }, [habits, timePeriod]);
 
-  const completionPercentage = streakStats.total > 0
-    ? Math.round((streakStats.completed / streakStats.total) * 100)
-    : 0;
-  const missedPercentage = streakStats.total > 0
-    ? Math.round((streakStats.missed / streakStats.total) * 100)
-    : 0;
+  // Mock Quote of the Day (static data)
+  useEffect(() => {
+    const mockQuotes = [
+      { q: "The only way to do great work is to love what you do.", a: "Steve Jobs" },
+      { q: "Believe you can and you're halfway there.", a: "Theodore Roosevelt" },
+      { q: "Success is not final, failure is not fatal.", a: "Winston Churchill" },
+      { q: "The future belongs to those who believe in their dreams.", a: "Eleanor Roosevelt" },
+      { q: "It does not matter how slowly you go as long as you do not stop.", a: "Confucius" },
+      { q: "Everything you've ever wanted is on the other side of fear.", a: "George Addair" },
+      { q: "Believe in yourself. You are braver than you think.", a: "Unknown" },
+      { q: "I never dreamed about success, I worked for it.", a: "Estée Lauder" },
+      { q: "Small progress is still progress.", a: "Unknown" },
+      { q: "Do what you can with all you have, wherever you are.", a: "Theodore Roosevelt" },
+    ];
 
-  const isLosingStreak = streakStats.currentStreak === 0 && streakStats.total > 0;
+    // Pick a random quote (no API call, pure mock data)
+    const randomQuote = mockQuotes[Math.floor(Math.random() * mockQuotes.length)];
+    setQuote({
+      q: randomQuote.q,
+      a: randomQuote.a,
+      h: ''
+    });
+    setQuoteLoading(false);
+  }, []);
 
-  const getPriorityColor = (priority?: Task['priority']) => {
-    switch (priority) {
-      case 'High': return 'bg-red-500';
-      case 'Medium': return 'bg-yellow-500';
-      case 'Low': return 'bg-green-500';
-      default: return 'bg-gray-400';
-    }
-  };
-
-  const getStatusColor = (status: Task['status']) => {
-    switch (status) {
-      case 'Done': return 'text-green-500';
-      case 'In progress': return 'text-blue-500';
-      case 'Re-surface': return 'text-yellow-500';
-      default: return 'text-gray-500';
-    }
-  };
-
-  const formatDueDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+  // Toggle habit completion
+  const toggleHabitToday = (habitId: string) => {
     const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    const todayStr = today.toISOString().split('T')[0];
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
-    if (dateStr === todayStr) return 'Today';
-    if (dateStr === tomorrowStr) return 'Tomorrow';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const handleClaimReward = (rewardId: string, coins: number, label: string) => {
-    const success = claimReward(rewardId, coins);
-    if (success) {
-      setRewardMessage(`🎉 Claimed ${coins} coins for ${label} streak!`);
-      setTimeout(() => setRewardMessage(null), 3000);
-    }
+    const habit = habits.find(h => h.id === habitId);
+    const todayKey = today.toISOString().split('T')[0];
+    const isCompleted = habit?.completions?.[todayKey] || false;
+    updateHabitCompletion(habitId, today, !isCompleted);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <select
-          value={timePeriod}
-          onChange={(e) => setTimePeriod(e.target.value as TimePeriod)}
-          className="text-xs bg-purple-50 dark:bg-[#1A1A2E] border-0 rounded-lg px-3 py-1.5 text-gray-600 dark:text-gray-300 font-medium cursor-pointer"
-        >
-          <option value="week">This week</option>
-          <option value="month">This month</option>
-        </select>
+    <div className="space-y-6 animate-fade-in">
+      {/* Greeting Header */}
+      <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+          👋 {getGreeting()}, {profile.username || 'User'}
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 ml-10">
+          Let's make today count. You've got {habits.length} habits scheduled.
+        </p>
       </div>
 
-      {isLosingStreak && (
-        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 flex items-center gap-3">
-          <AlertTriangle className="text-orange-500" size={20} />
-          <p className="text-orange-700 dark:text-orange-400 font-medium text-sm">
-            You're losing streaks - complete your habits today!
-          </p>
-        </div>
-      )}
-
-      {/* Quick Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Streak Card */}
-        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-4 text-white shadow-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Flame size={20} />
-            <span className="text-sm font-medium opacity-90">Current Streak</span>
-          </div>
-          <div className="text-3xl font-bold">{streakStats.currentStreak}</div>
-          <div className="text-xs opacity-75 mt-1">days</div>
-        </div>
-
-        {/* Tasks Done Card */}
-        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 size={20} />
-            <span className="text-sm font-medium opacity-90">Tasks Done</span>
-          </div>
-          <div className="text-3xl font-bold">{taskStats.done}</div>
-          <div className="text-xs opacity-75 mt-1">of {taskStats.total} total</div>
-        </div>
-
-        {/* Habits Today Card */}
-        <div className="bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl p-4 text-white shadow-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Target size={20} />
-            <span className="text-sm font-medium opacity-90">Habits Today</span>
-          </div>
-          <div className="text-3xl font-bold">{habitsCompletedToday}</div>
-          <div className="text-xs opacity-75 mt-1">of {habits.length} completed</div>
-        </div>
-
-        {/* In Progress Card */}
-        <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-4 text-white shadow-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock size={20} />
-            <span className="text-sm font-medium opacity-90">In Progress</span>
-          </div>
-          <div className="text-3xl font-bold">{taskStats.inProgress}</div>
-          <div className="text-xs opacity-75 mt-1">tasks active</div>
-        </div>
-      </div>
-
-      {/* Reward notification */}
-      {rewardMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-gradient-to-r from-yellow-500 to-amber-500 text-white px-6 py-3 rounded-xl shadow-lg animate-bounce">
-          <div className="flex items-center gap-2">
-            <Coins size={20} />
-            <span className="font-medium">{rewardMessage}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Streak Rewards */}
-      {streakStats.currentStreak >= 7 && (
-        <div className="bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/30 rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <Gift size={18} className="text-yellow-500" />
-              Streak Rewards
-            </h2>
-            <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-400">
-              <Coins size={16} />
-              <span className="font-semibold">{profile.coins} coins</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {streakRewards.map((reward) => {
-              const isClaimed = claimedRewards.includes(reward.id);
-              const canClaim = streakStats.currentStreak >= reward.days && !isClaimed;
-              const isLocked = streakStats.currentStreak < reward.days;
-
-              return (
-                <button
-                  key={reward.id}
-                  onClick={() => canClaim && handleClaimReward(reward.id, reward.coins, reward.label)}
-                  disabled={!canClaim}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${isClaimed
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 cursor-default'
-                      : canClaim
-                        ? 'bg-yellow-500 hover:bg-yellow-400 text-white cursor-pointer shadow-lg hover:scale-105'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
-                    }`}
-                >
-                  {isClaimed ? (
-                    <CheckCircle2 size={16} />
-                  ) : (
-                    <Gift size={16} />
-                  )}
-                  <span className="font-medium">{reward.label}</span>
-                  <span className={`text-sm ${isClaimed ? 'line-through' : ''}`}>
-                    +{reward.coins}
-                  </span>
-                  {isLocked && (
-                    <span className="text-xs opacity-75">({reward.days - streakStats.currentStreak} days left)</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Main Grid - Two Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column - Streak & Habits */}
-        <div className="space-y-6">
-          {/* Streak Statistics */}
-          <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <Flame size={18} className="text-orange-500" />
-                Habit Streaks
-              </h2>
+      {/* Main Grid - 5/8 Left (2.5/4), 3/8 Right (1.5/4) */}
+      <div className="grid grid-cols-1 lg:grid-cols-8 gap-6">
+        {/* Left Column - 5/8 (2.5/4) */}
+        <div className="lg:col-span-5 space-y-6 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+          {/* Your Habits Today Card - Redesigned like image 2 */}
+          <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Habits Today</h2>
               <button
                 onClick={() => router.push('/habits')}
-                className="text-xs text-purple-600 dark:text-purple-400 font-medium hover:underline flex items-center gap-1"
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors flex items-center gap-2 text-sm"
               >
-                View all <ChevronRight size={14} />
+                <Plus size={16} />
+                New Habit
               </button>
             </div>
 
-            <div className="flex items-center justify-center mb-6">
-              {/* Circular progress */}
-              <div className="relative w-32 h-32">
-                <svg className="w-32 h-32 transform -rotate-90">
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="currentColor"
-                    strokeWidth="10"
-                    fill="none"
-                    className="text-purple-100 dark:text-purple-900/30"
-                  />
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="currentColor"
-                    strokeWidth="10"
-                    fill="none"
-                    strokeDasharray={`${completionPercentage * 3.52} 352`}
-                    strokeLinecap="round"
-                    className="text-purple-600"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {completionPercentage}%
-                    </div>
-                    <div className="text-xs text-gray-500">completed</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 bg-purple-600 rounded-full"></div>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Completed</span>
-                </div>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">{completionPercentage}%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 bg-red-400 rounded-full"></div>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Missed</span>
-                </div>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">{missedPercentage}%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Today's Habits */}
-          <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <Target size={18} className="text-purple-500" />
-                Today's Habits
-              </h2>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {habitsCompletedToday}/{habits.length}
-              </span>
-            </div>
-
-            <div className="space-y-3">
+            {/* Habits List */}
+            <div className="space-y-1">
               {todayHabits.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                  No habits yet. Add some in the Habits page!
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                  No habits yet. Add some to get started!
                 </p>
               ) : (
-                todayHabits.map((habit) => (
-                  <div
-                    key={habit.id}
-                    onClick={() => router.push('/habits')}
-                    className={`flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer hover:scale-[1.02] ${habit.completedToday
-                      ? 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
-                      : 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                  >
-                    <span className={`flex-1 text-sm ${habit.completedToday
-                      ? 'text-green-700 dark:text-green-400 line-through'
-                      : 'text-gray-700 dark:text-gray-300'
-                      }`}>
-                      {habit.name}
-                    </span>
-                    {habit.completedToday && (
-                      <CheckCircle2 size={18} className="text-green-500" />
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+                todayHabits.map((habit, index) => {
+                  const categoryClass = categoryColors[habit.category] || 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+                  const isLastCompleted = habit.completedToday && index === todayHabits.length - 1;
 
-        {/* Right Column - Tasks */}
-        <div className="space-y-6">
-          {/* Tasks Overview */}
-          <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <ListTodo size={18} className="text-blue-500" />
-                Tasks Overview
-              </h2>
-              <button
-                onClick={() => router.push('/tracker')}
-                className="text-xs text-purple-600 dark:text-purple-400 font-medium hover:underline flex items-center gap-1"
-              >
-                View all <ChevronRight size={14} />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {/* Status breakdown */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Not Started</span>
-                  </div>
-                  <div className="text-xl font-bold text-gray-900 dark:text-white">{taskStats.notStarted}</div>
-                </div>
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">In Progress</span>
-                  </div>
-                  <div className="text-xl font-bold text-gray-900 dark:text-white">{taskStats.inProgress}</div>
-                </div>
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Done</span>
-                  </div>
-                  <div className="text-xl font-bold text-gray-900 dark:text-white">{taskStats.done}</div>
-                </div>
-                <div className={`rounded-xl p-3 ${taskStats.overdue > 0
-                  ? 'bg-red-50 dark:bg-red-900/20'
-                  : 'bg-gray-50 dark:bg-gray-800/50'
-                  }`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className={`w-2 h-2 rounded-full ${taskStats.overdue > 0 ? 'bg-red-500' : 'bg-gray-400'}`}></div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Overdue</span>
-                  </div>
-                  <div className={`text-xl font-bold ${taskStats.overdue > 0
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-gray-900 dark:text-white'
-                    }`}>{taskStats.overdue}</div>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              {taskStats.total > 0 && (
-                <div className="mt-4">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    <span>Progress</span>
-                    <span>{Math.round((taskStats.done / taskStats.total) * 100)}% complete</span>
-                  </div>
-                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  return (
                     <div
-                      className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-500"
-                      style={{ width: `${(taskStats.done / taskStats.total) * 100}%` }}
-                    />
-                  </div>
-                </div>
+                      key={habit.id}
+                      className={`flex items-center justify-between p-4 rounded-xl transition-all duration-200 ${habit.completedToday
+                        ? 'bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-800'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700/50'
+                        }`}
+                    >
+                      <div className="flex-1">
+                        {/* Habit Name & Category */}
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="font-semibold text-gray-900 dark:text-white">
+                            {habit.name}
+                          </h3>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${categoryClass}`}>
+                            {habit.category || 'General'}
+                          </span>
+                        </div>
+                        {/* Meta info */}
+                        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                          <span>Daily</span>
+                          <span>·</span>
+                          <span>{habit.reminderTime || '8:00 AM'}</span>
+                          <span>·</span>
+                          <span className={habit.completedToday ? 'text-green-600 dark:text-green-400 font-medium' : ''}>
+                            {habit.completedToday ? 'Complete ✓' : 'Not yet'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Checkbox */}
+                      <button
+                        onClick={() => toggleHabitToday(habit.id)}
+                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${habit.completedToday
+                          ? 'bg-purple-600 border-purple-600 text-white'
+                          : 'border-gray-300 dark:border-gray-600 hover:border-purple-500'
+                          }`}
+                      >
+                        {habit.completedToday && <CheckCircle2 size={18} />}
+                      </button>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
 
-          {/* Upcoming Deadlines */}
-          <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm">
+          {/* Upcoming Deadlines - Moved to left */}
+          <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <Calendar size={18} className="text-orange-500" />
                 Upcoming Deadlines
               </h2>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                Next 7 days
-              </span>
+              <button
+                onClick={() => router.push('/tracker')}
+                className="text-xs text-blue-500 hover:underline"
+              >
+                View all
+              </button>
             </div>
 
             <div className="space-y-3">
-              {upcomingTasks.length === 0 ? (
+              {tasks.filter(t => t.dueDate && t.status !== 'Done').slice(0, 4).length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                  No upcoming deadlines. Great job staying on top of things!
+                  No upcoming deadlines!
                 </p>
               ) : (
-                upcomingTasks.map((task) => (
+                tasks.filter(t => t.dueDate && t.status !== 'Done').slice(0, 4).map((task) => (
                   <div
                     key={task.id}
                     className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                     onClick={() => router.push('/tracker')}
                   >
-                    <div className={`w-1.5 h-8 rounded-full ${getPriorityColor(task.priority)}`}></div>
+                    <div className={`w-1.5 h-8 rounded-full ${task.priority === 'High' ? 'bg-red-500' :
+                      task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}></div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                         {task.title}
                       </p>
-                      <p className={`text-xs ${getStatusColor(task.status)}`}>
-                        {task.status}
-                      </p>
+                      <p className="text-xs text-gray-500">{task.status}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-medium text-gray-900 dark:text-white">
-                        {formatDueDate(task.dueDate!)}
+                        {new Date(task.dueDate!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </p>
-                      {task.projectId && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {projects.find(p => p.id === task.projectId)?.name}
-                        </p>
-                      )}
                     </div>
                   </div>
                 ))
               )}
             </div>
+          </div>
+
+          {/* Recent Activity - Moved to left */}
+          <div className="bg-white dark:bg-[#252540] rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Activity size={18} className="text-purple-500" />
+                Recent Activity
+              </h2>
+              <button
+                onClick={() => router.push('/calendar')}
+                className="text-xs text-purple-600 dark:text-purple-400 hover:underline"
+              >
+                View calendar
+              </button>
+            </div>
+
+            {recentActivities.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">
+                No recent activities. Start a focus timer or add events to your calendar!
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {recentActivities.slice(0, 4).map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50"
+                  >
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${activity.type === 'timer' ? 'bg-purple-500' : 'bg-blue-500'
+                      }`}></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700 dark:text-gray-300 truncate">{activity.text}</p>
+                    </div>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{activity.time}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column - 3/8 (1.5/4) */}
+        <div className="lg:col-span-3 space-y-6 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+          {/* Quote of the Day Card */}
+          <div className="bg-white dark:bg-[#252540] rounded-2xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+            {quoteLoading ? (
+              <div className="animate-pulse">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-3"></div>
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+              </div>
+            ) : quote ? (
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
+                    <span className="text-white text-sm">💭</span>
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Quote of the Day</h3>
+                </div>
+                <blockquote className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-3 italic">
+                  "{quote.q}"
+                </blockquote>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">— {quote.a}</p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">Unable to load quote</p>
+            )}
+          </div>
+
+          {/* Statistics Card - Stacked vertically */}
+          <div className="bg-white dark:bg-[#252540] rounded-2xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Statistics</h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard
+                icon={Flame}
+                title="Current Streak"
+                value={streakStats.currentStreak}
+                subtitle="days"
+                gradient="orange"
+              />
+              <StatCard
+                icon={CheckCircle2}
+                title="Tasks Done"
+                value={taskStats.done}
+                subtitle={`of ${taskStats.total} total`}
+                gradient="green"
+              />
+              <StatCard
+                icon={Target}
+                title="Habits Today"
+                value={habitsCompletedToday}
+                subtitle={`of ${habits.length} completed`}
+                gradient="purple"
+              />
+              <StatCard
+                icon={Clock}
+                title="In Progress"
+                value={taskStats.inProgress}
+                subtitle="tasks active"
+                gradient="blue"
+              />
+            </div>
+          </div>
+
+          {/* Streak Rewards Card */}
+          <div className="bg-white dark:bg-[#252540] rounded-2xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Streak Rewards</h2>
+
+            {/* Reward Icons */}
+            <div className="flex justify-center gap-4 mb-4">
+              {[
+                { id: 'streak-7', days: 7, coins: 50, label: '7 Days', icon: Trophy },
+                { id: 'streak-14', days: 14, coins: 100, label: '14 Days', icon: Star },
+                { id: 'streak-28', days: 28, coins: 200, label: '28 Days', icon: Gift },
+              ].map((reward) => {
+                const isClaimed = claimedRewards.includes(reward.id);
+                const canClaim = streakStats.currentStreak >= reward.days && !isClaimed;
+                const isLocked = streakStats.currentStreak < reward.days;
+                const IconComponent = reward.icon;
+
+                return (
+                  <div key={reward.id} className="text-center">
+                    <div className={`w-12 h-12 mx-auto mb-1 rounded-full flex items-center justify-center border-2 ${isClaimed
+                      ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700'
+                      : canClaim
+                        ? 'bg-blue-500 border-blue-500'
+                        : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                      }`}>
+                      {isLocked ? (
+                        <Lock size={16} className="text-gray-400" />
+                      ) : isClaimed ? (
+                        <CheckCircle2 size={16} className="text-blue-500" />
+                      ) : (
+                        <IconComponent size={16} className="text-white" />
+                      )}
+                    </div>
+                    <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{reward.label}</div>
+                    {isClaimed && (
+                      <div className="text-xs text-blue-500">Claimed</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Claim Button */}
+            {(() => {
+              const streakRewards = [
+                { id: 'streak-7', days: 7, coins: 50 },
+                { id: 'streak-14', days: 14, coins: 100 },
+                { id: 'streak-28', days: 28, coins: 200 },
+              ];
+              const nextClaimable = streakRewards.find(r =>
+                streakStats.currentStreak >= r.days && !claimedRewards.includes(r.id)
+              );
+
+              if (nextClaimable) {
+                return (
+                  <button
+                    onClick={() => claimReward(nextClaimable.id, nextClaimable.coins)}
+                    className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Coins size={16} />
+                    Claim {nextClaimable.coins} Coins
+                  </button>
+                );
+              } else {
+                return (
+                  <button
+                    disabled
+                    className="w-full py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-400 font-medium rounded-xl cursor-not-allowed text-sm"
+                  >
+                    {claimedRewards.length >= 3 ? 'All Rewards Claimed!' : 'Keep Going!'}
+                  </button>
+                );
+              }
+            })()}
           </div>
         </div>
       </div>

@@ -77,7 +77,15 @@ export default function CalendarPage() {
         const endHour = endDate.getHours() + endDate.getMinutes() / 60;
 
         const top = startHour * 48; // 48px per hour, starting from 0
-        const height = Math.max((endHour - startHour) * 48, 24); // minimum 24px
+        const durationMinutes = (endDate.getTime() - startDate.getTime()) / (1000 * 60);
+
+        // Minimum height for events under 15 minutes to ensure visibility (like Notion)
+        let height;
+        if (durationMinutes <= 15) {
+            height = 32; // Fixed minimum height for short events
+        } else {
+            height = Math.max((endHour - startHour) * 48, 32);
+        }
 
         return { top: `${top}px`, height: `${height}px` };
     };
@@ -421,6 +429,14 @@ export default function CalendarPage() {
                                         const eventColor = event.color || '#3d7a7a';
                                         const isDragging = draggingEvent?.event.id === event.id;
                                         const isResizing = resizingEvent?.event.id === event.id;
+
+                                        // Calculate if event is tall enough to show time inside (height > 60px)
+                                        const eventHeight = parseInt(style.height);
+                                        const showTimeInside = eventHeight > 30;
+
+                                        // Determine if title is long (>15 chars) to show time below
+                                        const isTitleLong = event.title.length > 15;
+
                                         return (
                                             <div
                                                 key={event.id}
@@ -436,13 +452,36 @@ export default function CalendarPage() {
                                                 }}
                                                 title={`${event.title}\n${formatTime(event.startTime)} - ${formatTime(event.endTime)}\nDrag to move • Drag bottom to resize • Double-click to edit`}
                                             >
-                                                <div className="text-xs font-medium text-white truncate pointer-events-none">
-                                                    {event.title}
-                                                </div>
-                                                <div className="text-xs text-white/80 truncate flex items-center gap-1 pointer-events-none">
-                                                    <Clock size={10} />
-                                                    {formatTime(event.startTime)} - {formatTime(event.endTime)}
-                                                </div>
+                                                {showTimeInside ? (
+                                                    isTitleLong ? (
+                                                        // Long title: stack vertically
+                                                        <>
+                                                            <div className="text-xs font-medium text-white truncate pointer-events-none">
+                                                                {event.title}
+                                                            </div>
+                                                            <div className="text-[10px] text-white/80 truncate flex items-center gap-1 pointer-events-none mt-0.5">
+                                                                <Clock size={9} />
+                                                                {formatTime(event.startTime)} - {formatTime(event.endTime)}
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        // Short title: show inline
+                                                        <div className="flex items-center justify-between gap-2 pointer-events-none">
+                                                            <div className="text-xs font-medium text-white truncate">
+                                                                {event.title}
+                                                            </div>
+                                                            <div className="text-[10px] text-white/80 whitespace-nowrap flex items-center gap-1">
+                                                                <Clock size={9} />
+                                                                {formatTime(event.startTime)}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                ) : (
+                                                    // Too short to show time inside, just show title
+                                                    <div className="text-xs font-medium text-white truncate pointer-events-none">
+                                                        {event.title}
+                                                    </div>
+                                                )}
 
                                                 {/* Resize handle at bottom */}
                                                 <div

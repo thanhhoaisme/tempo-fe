@@ -8,17 +8,10 @@ export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-
-  // Export Data Handler - Currently uses mock data
-  // TODO: Replace with actual API call when backend is ready: GET /api/users/export
   const handleExportData = async () => {
     setIsExporting(true);
 
     try {
-      // Mock data - Replace with API call when backend is ready
-      // const response = await fetch('/api/users/export', { headers: { Authorization: `Bearer ${token}` } });
-      // const blob = await response.blob();
-
       const exportData = {
         exportDate: new Date().toISOString(),
         version: '1.0',

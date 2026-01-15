@@ -1,11 +1,12 @@
 'use client';
 
-import { CheckSquareOffset, Plus, TrashSimple, Trash, CaretDown, CaretRight, CalendarBlank, Target, Gear } from 'phosphor-react';
+import { CheckSquareOffset, Plus, TrashSimple, Trash, CaretDown, CaretRight, CalendarBlank, Target, Gear, UsersThree, FileText } from 'phosphor-react';
 import { useState, useRef, useEffect } from 'react';
 import Toast from '@/components/features/Toast';
 import ConfirmDialog from '@/components/features/ConfirmDialog';
 import { useApp } from '@/context/AppContext';
-import { Task, Project } from '@/types';
+import { Task, Project, ProjectMember, ProjectInvitation } from '@/types';
+import { ProjectMembersModal } from '@/components/features/collaboration';
 
 export default function TrackerPage() {
   const { tasks: contextTasks, projects: contextProjects, setTasks: setContextTasks, setProjects: setContextProjects } = useApp();
@@ -111,6 +112,23 @@ export default function TrackerPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<{ id: string; value: string; original: string } | null>(null);
+
+  // Collaboration state
+  const [showMembersModal, setShowMembersModal] = useState<string | null>(null); // projectId or null
+
+  // Mock data for members (will come from API when backend is ready)
+  const getMockMembers = (projectId: string): ProjectMember[] => [
+    {
+      id: 'member-1',
+      userId: 'user-1',
+      projectId,
+      role: 'owner',
+      user: { id: 'user-1', name: 'You', email: 'you@example.com' },
+      joinedAt: Date.now() - 86400000 * 30,
+    }
+  ];
+
+  const getMockInvitations = (projectId: string): ProjectInvitation[] => [];
 
   const toggleProject = (projectId: string) => {
     setProjects(projects.map(p =>
@@ -236,30 +254,43 @@ export default function TrackerPage() {
   };
 
   const getStatusColor = (status: Task['status']) => {
-    switch (status) {
-      case 'Done': return 'bg-green-600 dark:bg-green-600';
-      case 'In progress': return 'bg-blue-600 dark:bg-blue-600';
-      case 'Re-surface': return 'bg-yellow-600 dark:bg-yellow-600';
-      default: return 'bg-gray-600 dark:bg-gray-600';
-    }
+    const statusOption = statusOptions.find(s => s.name === status);
+    const colorHex = statusOption ? statusColorMap[statusOption.color as keyof typeof statusColorMap] : statusColorMap.gray;
+    return colorHex;
   };
 
   const getStatusTextColor = (status: Task['status']) => {
-    switch (status) {
-      case 'Done': return 'text-green-600 dark:text-green-500';
-      case 'In progress': return 'text-blue-600 dark:text-blue-500';
-      case 'Re-surface': return 'text-yellow-600 dark:text-yellow-500';
-      default: return 'text-gray-600 dark:text-gray-500';
-    }
+    const statusOption = statusOptions.find(s => s.name === status);
+    if (!statusOption) return 'text-gray-600 dark:text-gray-500';
+
+    const colorMap: Record<string, string> = {
+      gray: 'text-gray-600 dark:text-gray-500',
+      red: 'text-red-600 dark:text-red-500',
+      yellow: 'text-yellow-600 dark:text-yellow-500',
+      green: 'text-green-600 dark:text-green-500',
+      blue: 'text-blue-600 dark:text-blue-500',
+      purple: 'text-purple-600 dark:text-purple-500',
+      pink: 'text-pink-600 dark:text-pink-500',
+    };
+
+    return colorMap[statusOption.color] || 'text-gray-600 dark:text-gray-500';
   };
 
   const getStatusBgColor = (status: Task['status']) => {
-    switch (status) {
-      case 'Done': return 'bg-green-100 dark:bg-green-900/30';
-      case 'In progress': return 'bg-blue-100 dark:bg-blue-900/30';
-      case 'Re-surface': return 'bg-yellow-100 dark:bg-yellow-900/30';
-      default: return 'bg-gray-100 dark:bg-gray-800';
-    }
+    const statusOption = statusOptions.find(s => s.name === status);
+    if (!statusOption) return 'bg-gray-100 dark:bg-gray-800';
+
+    const bgMap: Record<string, string> = {
+      gray: 'bg-gray-100 dark:bg-gray-800',
+      red: 'bg-red-100 dark:bg-red-900/30',
+      yellow: 'bg-yellow-100 dark:bg-yellow-900/30',
+      green: 'bg-green-100 dark:bg-green-900/30',
+      blue: 'bg-blue-100 dark:bg-blue-900/30',
+      purple: 'bg-purple-100 dark:bg-purple-900/30',
+      pink: 'bg-pink-100 dark:bg-pink-900/30',
+    };
+
+    return bgMap[statusOption.color] || 'bg-gray-100 dark:bg-gray-800';
   };
 
   const getPriorityBadgeColor = (priority?: Task['priority']) => {
@@ -300,10 +331,11 @@ export default function TrackerPage() {
         }
       };
 
-      document.addEventListener('mousedown', handleClickOutside);
+      // Use 'click' instead of 'mousedown' to allow onClick handlers to fire first
+      document.addEventListener('click', handleClickOutside);
       document.addEventListener('keydown', handleEscape);
       return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('click', handleClickOutside);
         document.removeEventListener('keydown', handleEscape);
       };
     }, []);
@@ -351,29 +383,36 @@ export default function TrackerPage() {
             }
           }}
         >
-          <span className={`text-xs px-3 py-1.5 rounded-md font-medium inline-block ${getStatusColor(task.status)} text-white`}>
+          <span
+            className="text-xs px-3 py-1.5 rounded-md font-medium inline-block text-white"
+            style={{ backgroundColor: getStatusColor(task.status) }}
+          >
             {task.status}
           </span>
           {openDropdown?.taskId === task.id && openDropdown?.type === 'status' && (
             <div className="absolute z-50 mt-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-300 dark:border-gray-600 p-1">
-              {(['Not started', 'In progress', 'Done', 'Re-surface'] as Task['status'][]).map((status) => (
+              {statusOptions.map((statusOpt) => (
                 <button
-                  key={status}
+                  key={statusOpt.name}
                   onClick={(e) => {
                     e.stopPropagation();
-                    updateTask(task.id, { status }, 'Status updated');
+                    updateTask(task.id, { status: statusOpt.name as Task['status'] }, 'Status updated');
                     setOpenDropdown(null);
                   }}
-                  className={`w-full text-left px-3 py-2 text-xs font-medium rounded transition-colors flex items-center gap-2 ${getStatusBgColor(status)} ${getStatusTextColor(status)} hover:opacity-80`}
+                  className={`w-full text-left px-3 py-2 text-xs font-medium rounded transition-colors flex items-center gap-2 ${getStatusBgColor(statusOpt.name as Task['status'])} ${getStatusTextColor(statusOpt.name as Task['status'])} hover:opacity-80`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${getStatusColor(status)}`}></span>
-                  {status}
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: statusColorMap[statusOpt.color as keyof typeof statusColorMap] }}
+                  ></span>
+                  {statusOpt.name}
                 </button>
               ))}
               <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  console.log('Edit property clicked, setting showEditProperty to status');
                   setShowEditProperty('status');
                   setOpenDropdown(null);
                 }}
@@ -604,13 +643,25 @@ export default function TrackerPage() {
           </td>
         )}
         <td className="px-4 py-3 text-center">
-          <button
-            onClick={() => deleteTask(task.id)}
-            className="group p-2.5 text-gray-400 hover:text-white hover:bg-red-500 dark:hover:bg-red-600 transition-all duration-300 cursor-pointer relative rounded-lg hover:shadow-lg hover:scale-110 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-red-500"
-          >
-            <TrashSimple size={20} weight="duotone" className="block group-hover:hidden" />
-            <Trash size={20} weight="duotone" className="hidden group-hover:block" />
-          </button>
+          <div className="flex items-center justify-center gap-2">
+            {/* Open Page Button */}
+            <button
+              onClick={() => window.open(`/page/${task.id}`, '_blank')}
+              className="group p-2.5 text-gray-400 hover:text-white hover:bg-purple-500 dark:hover:bg-purple-600 transition-all duration-300 cursor-pointer relative rounded-lg hover:shadow-lg hover:scale-110 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-purple-500"
+              title="Open document page"
+            >
+              <FileText size={20} weight="duotone" />
+            </button>
+            {/* Delete Button */}
+            <button
+              onClick={() => deleteTask(task.id)}
+              className="group p-2.5 text-gray-400 hover:text-white hover:bg-red-500 dark:hover:bg-red-600 transition-all duration-300 cursor-pointer relative rounded-lg hover:shadow-lg hover:scale-110 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-red-500"
+              title="Delete task"
+            >
+              <TrashSimple size={20} weight="duotone" className="block group-hover:hidden" />
+              <Trash size={20} weight="duotone" className="hidden group-hover:block" />
+            </button>
+          </div>
         </td>
       </tr>
     );
@@ -638,12 +689,13 @@ export default function TrackerPage() {
       {/* Edit Property Modal */}
       {showEditProperty && (
         <>
+          {console.log('Rendering Edit Property Modal, showEditProperty:', showEditProperty)}
           <div
-            className="fixed inset-0 z-50 bg-black/50"
+            className="fixed inset-0 z-[9999] bg-black/50"
             onClick={() => setShowEditProperty(null)}
           />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md border border-gray-300 dark:border-gray-600">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+            <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md border border-gray-300 dark:border-gray-600 pointer-events-auto">
               <div className="p-4 border-b border-gray-300 dark:border-gray-600 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Gear size={18} className="text-gray-600 dark:text-gray-400" />
@@ -724,7 +776,10 @@ export default function TrackerPage() {
                             onClick={() => setEditingStatus({ ...status, originalName: status.name, isNew: false })}
                             className="w-full flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 group"
                           >
-                            <span className={`w-2 h-2 rounded-full bg-${status.color}-600`}></span>
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: statusColorMap[status.color as keyof typeof statusColorMap] || statusColorMap.gray }}
+                            ></span>
                             <span className="text-sm text-gray-900 dark:text-white flex-1 text-left">{status.name}</span>
                             {status.default && <span className="text-xs text-gray-400">DEFAULT</span>}
                             {!status.default && (
@@ -836,8 +891,8 @@ export default function TrackerPage() {
             <button
               onClick={() => setView('project')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'project'
-                  ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-300'
+                ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
+                : 'text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-300'
                 }`}
             >
               <Target size={16} className="inline mr-2" />
@@ -846,8 +901,8 @@ export default function TrackerPage() {
             <button
               onClick={() => setView('all')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'all'
-                  ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-300'
+                ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
+                : 'text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-300'
                 }`}
             >
               All tasks
@@ -895,14 +950,17 @@ export default function TrackerPage() {
                   </button>
                   {bulkAction === 'status' && (
                     <div className="absolute z-50 mt-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-300 dark:border-gray-600 p-1">
-                      {(['Not started', 'In progress', 'Done', 'Re-surface'] as Task['status'][]).map((status) => (
+                      {statusOptions.map((statusOpt) => (
                         <button
-                          key={status}
-                          onClick={() => bulkUpdateStatus(status)}
-                          className={`w-full text-left px-3 py-2 text-xs font-medium rounded transition-colors flex items-center gap-2 ${getStatusBgColor(status)} ${getStatusTextColor(status)} hover:opacity-80`}
+                          key={statusOpt.name}
+                          onClick={() => bulkUpdateStatus(statusOpt.name as Task['status'])}
+                          className={`w-full text-left px-3 py-2 text-xs font-medium rounded transition-colors flex items-center gap-2 ${getStatusBgColor(statusOpt.name as Task['status'])} ${getStatusTextColor(statusOpt.name as Task['status'])} hover:opacity-80`}
                         >
-                          <span className={`w-2 h-2 rounded-full ${getStatusColor(status)}`}></span>
-                          {status}
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: statusColorMap[statusOpt.color as keyof typeof statusColorMap] }}
+                          ></span>
+                          {statusOpt.name}
                         </button>
                       ))}
                     </div>
@@ -1042,6 +1100,18 @@ export default function TrackerPage() {
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         {completedCount}/{projectTasks.length} completed
                       </span>
+                      <div className="flex-1" />
+                      {/* Members Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowMembersModal(project.id);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        <UsersThree size={16} weight="duotone" />
+                        Members
+                      </button>
                     </div>
                   </div>
 
@@ -1106,6 +1176,36 @@ export default function TrackerPage() {
         )}
 
       </div>
+
+      {/* Project Members Modal */}
+      {showMembersModal && (
+        <ProjectMembersModal
+          isOpen={true}
+          onClose={() => setShowMembersModal(null)}
+          projectId={showMembersModal}
+          projectName={projects.find(p => p.id === showMembersModal)?.name || 'Project'}
+          members={getMockMembers(showMembersModal)}
+          pendingInvitations={getMockInvitations(showMembersModal)}
+          currentUserId="user-1"
+          isOwner={true}
+          onInvite={async (email) => {
+            setToast({ message: `Invitation sent to ${email}`, type: 'success' });
+          }}
+          onRemoveMember={async (userId) => {
+            setToast({ message: 'Member removed', type: 'success' });
+          }}
+          onLeaveProject={async () => {
+            setToast({ message: 'Left project', type: 'success' });
+            setShowMembersModal(null);
+          }}
+          onCancelInvitation={async (invitationId) => {
+            setToast({ message: 'Invitation cancelled', type: 'success' });
+          }}
+          onTransferOwnership={async (newOwnerId) => {
+            setToast({ message: 'Ownership transferred', type: 'success' });
+          }}
+        />
+      )}
     </>
   );
 }

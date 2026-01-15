@@ -36,7 +36,7 @@ export interface ShopItem {
   id: string;
   name: string;
   description: string;
-  category: 'theme' | 'skin' | 'animation';
+  category: 'theme' | 'skin' | 'animation' | 'item';
   price: number; // in coins
   image: string;
   isOwned: boolean;
@@ -90,11 +90,17 @@ export interface AIAnalytics {
 export interface UserProfile {
   id: string;
   username: string;
+  fullName: string;
+  email: string;
+  avatarUrl?: string;
   coins: number;
   totalXP: number;
   level: number;
   theme: 'dark' | 'light';
   timerAnimation: TimerAnimationType;
+  inventory: Record<string, number>; // itemId -> quantity
+  currentStreak: number;
+  lastActiveDate: string; // ISO Date string (YYYY-MM-DD)
 }
 
 export interface AppState {
@@ -114,6 +120,13 @@ export interface Task {
   tags?: string[];
   projectId?: string;
   createdAt: number;
+  // Collaboration fields
+  createdBy?: string;
+  assigneeId?: string;
+  lastModifiedBy?: string;
+  lastModifiedAt?: number;
+  hasPage?: boolean;
+  pageId?: string;
 }
 
 export interface Project {
@@ -121,7 +134,69 @@ export interface Project {
   name: string;
   emoji: string;
   collapsed: boolean;
+  // Collaboration fields
+  ownerId?: string;
+  createdAt?: number;
+}
+
+// Collaboration Types
+export type ProjectRole = 'owner' | 'member';
+
+export interface ProjectMember {
+  id: string;
+  userId: string;
+  projectId: string;
+  role: ProjectRole;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+  };
+  joinedAt: number;
+}
+
+export interface ProjectInvitation {
+  id: string;
+  projectId: string;
+  projectName: string;
+  email: string;
+  token: string;
+  expiresAt: number;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface TaskPage {
+  id: string;
+  taskId: string;
+  projectId: string;
+  title: string;
+  createdAt: number;
+  createdBy: string;
+  lastEditedAt: number;
+  lastEditedBy: string;
+  version: number;
+}
+
+export interface PageComment {
+  id: string;
+  pageId: string;
+  userId: string;
+  user: {
+    name: string;
+    avatarUrl?: string;
+  };
+  content: string;
+  selectionStart?: number;
+  selectionEnd?: number;
+  parentId?: string;
+  resolved: boolean;
+  createdAt: number;
+  updatedAt: number;
+  replies?: PageComment[];
 }
 
 // Navigation Types
 export type PageType = 'home' | 'timer' | 'notes' | 'shop' | 'tracker' | 'analytics';
+
