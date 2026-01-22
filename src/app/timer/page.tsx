@@ -188,101 +188,101 @@ export default function TimerPage() {
             ) : (
               /* Default Coffee Mug */
               <svg width="288" height="288" viewBox="0 0 200 200" className="mx-auto">{/* Mug Body Outline */}
-              <path
-                d="M 45 50 L 45 150 Q 45 170 65 170 L 135 170 Q 155 170 155 150 L 155 50 Z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-gray-400 dark:text-gray-500"
-              />
-
-              {/* Coffee Liquid - Drains based on timer */}
-              <defs>
-                <clipPath id="mugClip">
-                  <path d="M 45 50 L 45 150 Q 45 170 65 170 L 135 170 Q 155 170 155 150 L 155 50 Z" />
-                </clipPath>
-                <linearGradient id="coffeeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#8B4513" />
-                  <stop offset="100%" stopColor="#5D2E0C" />
-                </linearGradient>
-              </defs>
-
-              <g clipPath="url(#mugClip)">
-                {/* Coffee fill - height based on remaining time */}
-                <rect
-                  x="45"
-                  y={170 - (120 * coffeeLevel / 100)}
-                  width="110"
-                  height={120 * coffeeLevel / 100}
-                  fill="url(#coffeeGradient)"
-                  className="transition-all duration-1000"
+                <path
+                  d="M 45 50 L 45 150 Q 45 170 65 170 L 135 170 Q 155 170 155 150 L 155 50 Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-gray-400 dark:text-gray-500"
                 />
 
-                {/* Coffee surface shine */}
-                <ellipse
-                  cx="100"
-                  cy={170 - (120 * coffeeLevel / 100)}
-                  rx="50"
-                  ry="8"
-                  fill="#A0522D"
-                  opacity="0.7"
-                  className="transition-all duration-1000"
+                {/* Coffee Liquid - Drains based on timer */}
+                <defs>
+                  <clipPath id="mugClip">
+                    <path d="M 45 50 L 45 150 Q 45 170 65 170 L 135 170 Q 155 170 155 150 L 155 50 Z" />
+                  </clipPath>
+                  <linearGradient id="coffeeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#8B4513" />
+                    <stop offset="100%" stopColor="#5D2E0C" />
+                  </linearGradient>
+                </defs>
+
+                <g clipPath="url(#mugClip)">
+                  {/* Coffee fill - height based on remaining time */}
+                  <rect
+                    x="45"
+                    y={170 - (120 * coffeeLevel / 100)}
+                    width="110"
+                    height={120 * coffeeLevel / 100}
+                    fill="url(#coffeeGradient)"
+                    className="transition-all duration-1000"
+                  />
+
+                  {/* Coffee surface shine */}
+                  <ellipse
+                    cx="100"
+                    cy={170 - (120 * coffeeLevel / 100)}
+                    rx="50"
+                    ry="8"
+                    fill="#A0522D"
+                    opacity="0.7"
+                    className="transition-all duration-1000"
+                  />
+
+                  {/* Steam when coffee is hot (when time > 50%) */}
+                  {coffeeLevel > 50 && (
+                    <>
+                      <path
+                        d="M 80 45 Q 75 30 80 20"
+                        stroke="#ffffff"
+                        strokeWidth="2"
+                        fill="none"
+                        opacity="0.4"
+                        className="animate-pulse"
+                      />
+                      <path
+                        d="M 100 42 Q 95 25 100 12"
+                        stroke="#ffffff"
+                        strokeWidth="2"
+                        fill="none"
+                        opacity="0.5"
+                        className="animate-pulse"
+                      />
+                      <path
+                        d="M 120 45 Q 125 30 120 20"
+                        stroke="#ffffff"
+                        strokeWidth="2"
+                        fill="none"
+                        opacity="0.4"
+                        className="animate-pulse"
+                      />
+                    </>
+                  )}
+                </g>
+
+                {/* Mug Handle */}
+                <path
+                  d="M 155 70 Q 185 70 185 100 Q 185 130 155 130"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-gray-400 dark:text-gray-500"
                 />
 
-                {/* Steam when coffee is hot (when time > 50%) */}
-                {coffeeLevel > 50 && (
-                  <>
-                    <path
-                      d="M 80 45 Q 75 30 80 20"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      fill="none"
-                      opacity="0.4"
-                      className="animate-pulse"
-                    />
-                    <path
-                      d="M 100 42 Q 95 25 100 12"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      fill="none"
-                      opacity="0.5"
-                      className="animate-pulse"
-                    />
-                    <path
-                      d="M 120 45 Q 125 30 120 20"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      fill="none"
-                      opacity="0.4"
-                      className="animate-pulse"
-                    />
-                  </>
-                )}
-              </g>
-
-              {/* Mug Handle */}
-              <path
-                d="M 155 70 Q 185 70 185 100 Q 185 130 155 130"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-gray-400 dark:text-gray-500"
-              />
-
-              {/* Inner shadow for depth */}
-              <path
-                d="M 45 50 L 45 150 Q 45 170 65 170 L 135 170 Q 155 170 155 150 L 155 50"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                opacity="0.2"
-                className="text-gray-900 dark:text-gray-100"
-              />
-            </svg>
+                {/* Inner shadow for depth */}
+                <path
+                  d="M 45 50 L 45 150 Q 45 170 65 170 L 135 170 Q 155 170 155 150 L 155 50"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  opacity="0.2"
+                  className="text-gray-900 dark:text-gray-100"
+                />
+              </svg>
             )}
 
             {/* Circular Progress Ring */}
@@ -377,18 +377,11 @@ export default function TimerPage() {
             {durations.map((duration) => (
               <button
                 key={duration.value}
-                onClick={() => {
-                  handleDurationChange(duration.value);
-                  setToast({ message: `Timer set to ${duration.value} minutes`, type: 'success' });
-                  // Auto-dismiss toast after 3 seconds
-                  setTimeout(() => {
-                    setToast(null);
-                  }, 3000);
-                }}
+                onClick={() => handleDurationChange(duration.value)}
                 disabled={isRunning}
                 className={`p-3 rounded-xl font-medium transition-all text-sm ${selectedDuration === duration.value
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-amber-50 dark:bg-[#1A1A2E] text-gray-700 dark:text-gray-300 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-amber-50 dark:bg-[#1A1A2E] text-gray-700 dark:text-gray-300 hover:bg-amber-100 dark:hover:bg-amber-900/30'
                   } ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {duration.label}
@@ -412,16 +405,6 @@ export default function TimerPage() {
                 if (mins > 0 && mins <= 120) {
                   handleDurationChange(mins);
                   setCustomMinutes('');
-                  setToast({ message: `Timer set to ${mins} minutes`, type: 'success' });
-                  // Auto-dismiss toast after 3 seconds
-                  setTimeout(() => {
-                    setToast(null);
-                  }, 3000);
-                } else {
-                  setToast({ message: 'Please enter a valid time between 1-120 minutes', type: 'warning' });
-                  setTimeout(() => {
-                    setToast(null);
-                  }, 3000);
                 }
               }}
               disabled={isRunning || !customMinutes}

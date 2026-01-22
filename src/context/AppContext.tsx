@@ -54,7 +54,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     theme: 'light',
     timerAnimation: 'coffee',
     inventory: {},
-    currentStreak: 0,
+    currentStreak: 8, // MOCK: Set to 8 days for testing streak rewards
     lastActiveDate: '',
   });
 

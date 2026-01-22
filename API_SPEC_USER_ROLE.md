@@ -1,12 +1,15 @@
-Tổng hợp API cần implement (role: `user`)
+# Tổng hợp API cần implement (role: `user`)
 
-Ghi chú chung:
+## Ghi chú chung
 - Tất cả endpoints yêu cầu authentication Bearer token (trừ `/auth/register` và `/auth/login`).
 - Role `user` đủ cho thao tác CRUD bình thường; nếu cần quản trị (quản lý user/global settings) có thể thêm role `admin` sau.
 - Định dạng response chuẩn: { success: boolean, data?: any, error?: string }
 - Thêm pagination/filtering query params khi danh sách lớn: `?page=1&limit=20&search=...`.
 
-1) Authentication / User
+---
+
+## 1) Authentication / User
+
 - POST /api/auth/register
   - Mục đích: Tạo tài khoản mới
   - Body: { username, fullName, email, password }
@@ -18,20 +21,16 @@ Ghi chú chung:
       - Only alphanumeric, underscore, dot (no spaces or special chars)
       - Must be unique (case-insensitive)
       - Cannot start with a number
-    - **Full name validation:** Minimum 2 characters, maximum 100 characters
-  - Auth: no
-  - Response: { token, user }
-  - **Backend Validation Required:**
+    - **Full name validation:** Minimum 2 characters, maximum 50 characters
     - **Password strength:** Minimum 8 characters
     - **Password complexity:** Must contain at least:
       - 1 uppercase letter (A-Z)
       - 1 lowercase letter (a-z)
       - 1 number (0-9)
       - 1 special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
-    - **Password blacklist:** Check against common passwords (use library like passay or zxcvbn server-side)
+    - **Password blacklist:** Check against common passwords (server-side implementation — e.g. `passay` for Java or `zxcvbn` server-side ports)
     - **Email validation:** Valid email format and domain
     - **Email uniqueness:** Check if email already exists
-    - **Name validation:** Minimum 2 characters, maximum 100 characters
   - **Rate limiting:** Max 5 registration attempts per IP per hour
   - **Password hashing:** Use bcrypt or argon2 (cost factor ≥ 12 for bcrypt)
 
@@ -79,18 +78,167 @@ Ghi chú chung:
     - **Email notification:** Send email to user confirming password change
     - **Password blacklist:** Check against common passwords database
 
-2) Tasks (core)
+---
+
+## 2) Dashboard
+
+- GET /api/dashboard/overview
+  - Mục đích: Lấy tổng quan dashboard (tổng hợp nhiều metrics)
+  - Auth: yes
+  - Response: 
+    ```json
+    {
+      "tasks": {
+        "total": 45,
+        "completedToday": 3,
+        "overdue": 2,
+        "dueThisWeek": 7
+      },
+      "habits": {
+        "totalHabits": 8,
+        "completedToday": 5,
+        "completionRate": 62.5
+      },
+      "streak": {
+        "currentStreak": 12,
+        "longestStreak": 28,
+        "nextMilestone": {
+          "days": 14,
+          "reward": 100
+        }
+      },
+      "productivity": {
+        "todayHours": 4.5,
+        "weekHours": 23.2,
+        "totalSessions": 156
+      },
+      "coins": 450
+    }
+    ```
+  - Logic:
+    - Tổng hợp data từ tasks, habits, streak, timer sessions
+    - Cache 5 phút để giảm database queries
+    - Chỉ tính completed tasks/habits của hôm nay (today 00:00 - 23:59)
+
+- GET /api/dashboard/recent-activities
+  - Mục đích: Lấy danh sách hoạt động gần đây
+  - Auth: yes
+  - Query: ?limit=10 (default 10, max 50)
+  - Response: { activities: Activity[] }
+  - Activity structure:
+    ```json
+    {
+      "id": "activity-123",
+      "type": "task_completed" | "habit_completed" | "timer_session" | "comment_added" | "project_joined",
+      "title": "Completed Design Mockups",
+      "description": "Task completed in 2h 30m",
+      "timestamp": 1704931200000,
+      "metadata": {
+        "taskId": "task-1",
+        "duration": 9000,
+        "projectName": "Website Redesign"
+      }
+    }
+    ```
+  - Logic:
+    - Trả về max 50 activities gần nhất (sorted by timestamp desc)
+    - Activity types: task_completed, task_created, habit_completed, timer_session, comment_added, project_joined, streak_milestone
+    - Include metadata để link đến resource (taskId, habitId, etc.)
+
+- GET /api/dashboard/productivity
+  - Mục đích: Lấy productivity stats (timer sessions)
+  - Auth: yes
+  - Query: ?period=today|week|month (default: week)
+  - Response:
+    ```json
+    {
+      "period": "week",
+      "totalHours": 23.5,
+      "totalSessions": 42,
+      "averageSessionLength": 33.6,
+      "mostProductiveDay": "Monday",
+      "breakdown": {
+        "Monday": 4.5,
+        "Tuesday": 3.2,
+        "Wednesday": 5.1,
+        "Thursday": 4.8,
+        "Friday": 3.9,
+        "Saturday": 1.5,
+        "Sunday": 0.5
+      },
+      "topProjects": [
+        {
+          "projectId": "proj-1",
+          "projectName": "Website Redesign",
+          "hours": 12.3,
+          "percentage": 52.3
+        }
+      ]
+    }
+    ```
+  - Logic:
+    - Tính từ timer sessions trong khoảng thời gian
+    - today: hôm nay (00:00 - 23:59)
+    - week: 7 ngày gần nhất
+    - month: 30 ngày gần nhất
+    - averageSessionLength tính bằng phút
+
+- GET /api/dashboard/upcoming
+  - Mục đích: Lấy tasks sắp đến hạn
+  - Auth: yes
+  - Query: ?days=7 (default: 7 days, max: 30)
+  - Response:
+    ```json
+    {
+      "items": [
+        {
+          "id": "task-1",
+          "title": "Submit quarterly report",
+          "dueDate": "2026-01-20",
+          "priority": "high",
+          "projectId": "proj-1",
+          "projectName": "Company Projects",
+          "daysUntilDue": 3,
+          "isOverdue": false
+        }
+      ],
+      "overdue": [
+        {
+          "id": "task-2",
+          "title": "Review pull requests",
+          "dueDate": "2026-01-15",
+          "priority": "medium",
+          "daysOverdue": 2
+        }
+      ]
+    }
+    ```
+  - Logic:
+    - items: Tasks có dueDate trong X ngày tới (sorted by dueDate asc)
+    - overdue: Tasks có dueDate < today (sorted by dueDate desc - oldest first)
+    - Include project name nếu task thuộc project
+    - daysUntilDue: số ngày còn lại (positive number)
+    - daysOverdue: số ngày quá hạn (positive number)
+
+---
+
+## 3) Tasks
+
 - GET /api/tasks
   - Mục đích: Lấy danh sách task (table view)
-  - Query: ?projectId=&status=&priority=&search=&page=&limit=
+  - Query: ?projectId=&status=&priority=&search=&page=&limit=&includeShared=true
   - Auth: yes
   - Response: { items: Task[], total }
+  - Logic: Trả về tasks user tạo + tasks từ projects user là owner/member (nếu includeShared=true)
 
 - POST /api/tasks
   - Mục đích: Tạo task
-  - Body: { title, projectId?, dueDate?, priority?, status?, tags? }
+  - Body: { title, projectId?, dueDate?, priority?, status?, assigneeId? }
   - Auth: yes
   - Response: { task }
+  - Logic: 
+    - Solo task (no projectId): chỉ có thể self-assign
+    - Project task: owner/member có thể assign cho bất kỳ member nào trong project
 
 - GET /api/tasks/:id
   - Mục đích: Lấy chi tiết task
@@ -98,10 +246,13 @@ Ghi chú chung:
   - Response: { task }
 
 - PUT /api/tasks/:id
-  - Mục đích: Cập nhật task (title, status, priority, dueDate, projectId, tags)
+  - Mục đích: Cập nhật task (title, status, priority, dueDate, projectId, assigneeId)
   - Body: Partial<Task>
   - Auth: yes
-  - Response: { task }
+  - Response: { task, assignee?: { id, name, avatarUrl } }
+  - Logic: 
+    - Khi update assigneeId, validate assignee là member của project
+    - Trả về assignee object để UI hiển thị
 
 - DELETE /api/tasks/:id
   - Mục đích: Xóa task
@@ -113,7 +264,157 @@ Ghi chú chung:
   - Body: { ids: string[], updates: Partial<Task> }
   - Auth: yes
 
-3) Projects
+### Subtasks
+
+> Simple subtasks với title và status (todo/done) only.
+
+- GET /api/tasks/:taskId/subtasks
+  - Mục đích: Lấy danh sách subtasks của task
+  - Auth: yes
+  - Response: { subtasks: Subtask[] }
+  - Subtask: { id, parentTaskId, title, status: 'todo'|'done', sortOrder, completedAt?, createdAt }
+
+- POST /api/tasks/:taskId/subtasks
+  - Mục đích: Tạo subtask mới
+  - Body: { title }
+  - Auth: yes
+  - Response: { subtask }
+
+- PUT /api/subtasks/:id
+  - Mục đích: Cập nhật subtask (title, status)
+  - Body: { title?, status? }
+  - Auth: yes
+  - Response: { subtask }
+  - Logic: Khi status = 'done', tự động set completedAt = now()
+
+- DELETE /api/subtasks/:id
+  - Mục đích: Xóa subtask
+  - Auth: yes
+  - Response: { success }
+
+---
+
+## 4) Task Pages (Collaborative Documents)
+
+> Cả owner và member đều có full quyền (view, comment, edit) với task pages.
+
+### CRUD Operations
+
+- POST /api/tasks/:taskId/page
+  - Mục đích: Tạo page mới cho task
+  - Body: { title?: string }
+  - Auth: yes (owner hoặc member của project)
+  - Response: { page: TaskPage }
+  - TaskPage: { id, taskId, projectId, title, createdAt, createdBy }
+  - Note: Content sẽ sync qua WebSocket (Y.js), không lưu qua REST API
+
+- GET /api/tasks/:taskId/page
+  - Mục đích: Lấy thông tin page của task
+  - Auth: yes (owner hoặc member của project)
+  - Response: { 
+      page: TaskPage,
+      documentState?: string  // Base64 Y.js document state for initial load
+    }
+
+- PUT /api/pages/:pageId
+  - Mục đích: Update page metadata (title)
+  - Body: { title: string }
+  - Auth: yes (owner hoặc member)
+  - Response: { page: TaskPage }
+
+- DELETE /api/pages/:pageId
+  - Mục đích: Xóa page
+  - Auth: yes (owner only)
+  - Response: { success: boolean }
+  - Note: Cũng xóa tất cả comments liên quan
+
+### Page Comments
+
+> **Inline Comments Feature**: Users can select text in the document and add a comment referencing that specific selection. The `selectionStart` and `selectionEnd` fields store the character positions.
+>
+> **Click-to-Navigate**: When user clicks on a comment in the sidebar, the editor should:
+> 1. Scroll to the referenced text position (using `selectionStart`/`selectionEnd`)
+> 2. Highlight the referenced text temporarily (e.g., yellow background for 2 seconds)
+> 3. If `selectionStart` is null (general comment), just scroll to top of document
+>
+> **Reply Feature**: Comments support threaded replies. To reply:
+> 1. User clicks "Reply" button on a comment
+> 2. POST with `parentId` set to the parent comment's ID
+> 3. Frontend displays replies indented/nested under parent comment
+> 4. Replies inherit the parent's text selection context for reference
+
+- GET /api/pages/:pageId/comments
+  - Mục đích: Lấy tất cả comments của page
+  - Auth: yes (owner hoặc member)
+  - Query params: 
+    - resolved?: boolean (filter by resolved status)
+    - includeReplies?: boolean (default true)
+  - Response: { comments: PageComment[] }
+  - PageComment structure:
+    ```json
+    {
+      "id": "comment-123",
+      "pageId": "page-1",
+      "userId": "user-2",
+      "user": { "name": "John Doe", "avatarUrl": "..." },
+      "content": "This needs more detail",
+      "selectionStart": 150,
+      "selectionEnd": 200,
+      "quotedText": "the selected text",
+      "parentId": null,
+      "resolved": false,
+      "createdAt": 1704931200000,
+      "updatedAt": 1704931200000,
+      "replies": [
+        {
+          "id": "comment-124",
+          "pageId": "page-1",
+          "userId": "user-3",
+          "user": { "name": "Jane Smith", "avatarUrl": "..." },
+          "content": "I agree, we should also mention the dependencies.",
+          "parentId": "comment-123",
+          "resolved": false,
+          "createdAt": 1704931500000,
+          "updatedAt": 1704931500000
+        }
+      ]
+    }
+    ```
+  - Logic:
+    - Server trả về comments với nested replies khi `includeReplies=true` (default)
+    - Replies không có `selectionStart`/`selectionEnd` riêng, inherit từ parent comment
+    - Frontend click vào reply cũng scroll đến vị trí text của parent comment
+
+- POST /api/pages/:pageId/comments
+  - Mục đích: Tạo comment mới (general hoặc inline)
+  - Body: 
+    ```json
+    {
+      "content": "string (required)",
+      "selectionStart": "number (optional, for inline comments)",
+      "selectionEnd": "number (optional, for inline comments)",
+      "parentId": "string (optional, for replies)"
+    }
+    ```
+  - Auth: yes (owner hoặc member)
+  - Response: { comment: PageComment }
+
+- PUT /api/pages/:pageId/comments/:commentId
+  - Mục đích: Cập nhật comment
+  - Body: { content?: string, resolved?: boolean }
+  - Auth: yes (comment owner, hoặc project owner)
+  - Response: { comment: PageComment }
+
+- DELETE /api/pages/:pageId/comments/:commentId
+  - Mục đích: Xóa comment
+  - Auth: yes (comment owner, hoặc project owner)
+  - Response: { success: boolean }
+  - Note: Xóa comment cũng xóa tất cả replies
+
+---
+
+## 5) Projects
+
 - GET /api/projects
   - Mục đích: Lấy danh sách projects (dùng cho select)
   - Auth: yes
@@ -132,33 +433,69 @@ Ghi chú chung:
   - Mục đích: Xóa project
   - Auth: yes
 
-4) Status / Priority (option sets)
-- GET /api/meta/statuses
-  - Mục đích: Lấy option status
+### Project Collaboration
+
+> **Role System**: Chỉ có 2 roles:
+> - **owner**: Tạo project, CRUD project, mời/xóa members
+> - **member**: CRUD tasks trong project (không thể CRUD project)
+
+- GET /api/projects/:id/members
+  - Mục đích: Lấy danh sách thành viên của project
+  - Auth: yes (owner hoặc member của project)
+  - Response: { members: ProjectMember[] }
+  - ProjectMember: { id, userId, projectId, role: 'owner' | 'member', user: { id, name, email, avatarUrl }, joinedAt }
+
+- POST /api/projects/:id/invite
+  - Mục đích: Mời thành viên mới vào project (role = member)
+  - Body: { email: string }
+  - Auth: yes (owner only)
+  - Response: { invitation: ProjectInvitation }
+  - Logic:
+    - Kiểm tra email có tồn tại trong hệ thống không
+    - Nếu có: tạo invitation và gửi notification
+    - Nếu không: gửi email invitation link
+    - Token expires sau 7 ngày
+    - Invited user sẽ được assign role "member" khi accept
+
+- DELETE /api/projects/:id/members/:userId
+  - Mục đích: Xóa member khỏi project, hoặc member tự rời
+  - Auth: yes (owner, hoặc user tự rời)
+  - Response: { success: boolean }
+  - Logic: Owner không thể rời project, phải transfer ownership hoặc xóa project
+
+- PUT /api/projects/:id/transfer-ownership
+  - Mục đích: Chuyển quyền owner cho member khác
+  - Body: { newOwnerId: string }
+  - Auth: yes (owner only)
+  - Response: { success: boolean, project: Project }
+  - Logic: Old owner thành member, new owner thành owner
+
+- DELETE /api/projects/:id/invitations/:invitationId
+  - Mục đích: Hủy lời mời đã gửi
+  - Auth: yes (owner only)
+  - Response: { success: boolean }
+
+### Project Invitations (User side)
+
+- GET /api/users/invitations
+  - Mục đích: Lấy danh sách lời mời đang pending của user hiện tại
   - Auth: yes
+  - Response: { invitations: ProjectInvitation[] }
 
-- GET /api/meta/priorities
-  - Mục đích: Lấy option priority
+- POST /api/invitations/:token/accept
+  - Mục đích: Chấp nhận lời mời (user trở thành member)
   - Auth: yes
+  - Response: { project: Project }
 
-- (Optional) POST/PUT/DELETE cho chỉnh sửa option nếu user có quyền
-
-5) Notes
-- GET /api/notes?taskId? /api/notes
-  - Mục đích: Lấy note(s)
+- POST /api/invitations/:token/decline
+  - Mục đích: Từ chối lời mời
   - Auth: yes
+  - Response: { success: boolean }
 
-- POST /api/notes
-  - Mục đích: Tạo note
-  - Body: { title, content, taskId? }
+---
 
-- PUT /api/notes/:id
-  - Mục đích: Update note
+## 6) Habits
 
-- DELETE /api/notes/:id
-  - Mục đích: Delete note
-
-6) Habits
 - GET /api/habits
   - Mục đích: Lấy danh sách habits của user
   - Auth: yes
@@ -204,8 +541,10 @@ Ghi chú chung:
     - completedToday: Đếm số habits có completions[today] = true
     - completionRate: (completedToday / totalHabits) * 100
 
+---
 
-7) Timer / Sessions
+## 7) Timer / Sessions
+
 - POST /api/timer/start
   - Mục đích: Bắt đầu phiên time-tracking
   - Body: { taskId? }
@@ -214,48 +553,14 @@ Ghi chú chung:
   - Mục đích: Dừng phiên và lưu duration
   - Body: { sessionId, notes? }
 
-- GET /api/timer/sessions?taskId?dateRange?
+- GET /api/timer/sessions
+  - Mục đích: Lấy danh sách sessions
+  - Query: ?taskId=&dateRange=
 
-8) Analytics / AI features (if any)
-- POST /api/ai/chat
-  - Mục đích: Chat endpoint (proxy to AI backend)
-  - Body: { message, context? }
+---
 
-- POST /api/ai/analytics
-  - Mục đích: Request analytics/report generation
-  - Body: { startDate, endDate, metrics[] }
+## 8) Calendar Events
 
-9) Shop / Purchases (if used in UI)
-- GET /api/shop/items
-- POST /api/shop/purchase
-
-10) Notifications
-- GET /api/notifications
-- POST /api/notifications/mark-read (single / bulk)
-
-11) Settings / Preferences
-- GET /api/settings
-  - Mục đích: Lấy user preferences (theme, notifications, time-format,...)
-  - Auth: yes
-  - Response: { settings: { theme, pushNotifications, emailNotifications, timeFormat } }
-
-- PUT /api/settings
-  - Mục đích: Lưu user preferences (theme, time-format, notification settings)
-  - Body: { theme?, pushNotifications?, emailNotifications?, timeFormat? }
-  - Auth: yes
-  - Response: { settings }
-  - Logic: 
-    - pushNotifications: boolean - Enable/disable browser push notifications
-    - emailNotifications: boolean - Enable/disable daily email summary
-    - If emailNotifications is true, system sends daily digest via email
-    - If emailNotifications is false, only in-app notifications are sent
-
-12) File upload (avatars, attachments)
-- POST /api/uploads
-  - Body: form-data file
-  - Response: { url }
-
-13) Calendar Events
 - GET /api/calendar/events
   - Mục đích: Lấy danh sách events trong khoảng thời gian
   - Query: ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
@@ -282,7 +587,29 @@ Ghi chú chung:
   - Response: { success }
   - Logic: Kiểm tra user ownership trước khi xóa
 
-14) Shop / Timer Skins
+---
+
+## 9) Notes
+
+- GET /api/notes
+  - Mục đích: Lấy note(s)
+  - Query: ?taskId=
+  - Auth: yes
+
+- POST /api/notes
+  - Mục đích: Tạo note
+  - Body: { title, content, taskId? }
+
+- PUT /api/notes/:id
+  - Mục đích: Update note
+
+- DELETE /api/notes/:id
+  - Mục đích: Delete note
+
+---
+
+## 10) Shop / Timer Skins
+
 - GET /api/shop/items
   - Mục đích: Lấy danh sách timer skins có thể mua
   - Auth: yes
@@ -291,7 +618,7 @@ Ghi chú chung:
   - **Pre-defined Items:**
     - `streak-freeze`: Is a consumable item.
       - Name: Streak Freeze (Thẻ đóng băng chuỗi)
-      - Description: Automatically protects your streak if you miss a day. Consumed upon use. (Tự động bảo vệ chuỗi của bạn nếu bạn quên 1 ngày. Tiêu hao khi sử dụng.)
+      - Description: Automatically protects your streak if you miss a day. Consumed upon use.
       - Price: 100 coins
       - Type: 'item'
 
@@ -314,7 +641,10 @@ Ghi chú chung:
   - Response: { activeSkin: string }
   - Logic: Kiểm tra user có sở hữu skin không trước khi activate
 
-15) Coins / Currency System
+---
+
+## 11) Coins / Currency System
+
 - GET /api/users/coins
   - Mục đích: Lấy số coins hiện tại của user
   - Auth: yes
@@ -327,7 +657,10 @@ Ghi chú chung:
   - Response: { coins: number }
   - Logic: Cộng coins vào user balance, log transaction history
 
-16) Streak Rewards System
+---
+
+## 12) Streak Rewards System
+
 - GET /api/users/streak-rewards
   - Mục đích: Lấy danh sách streak rewards đã claim và chưa claim
   - Auth: yes
@@ -346,11 +679,11 @@ Ghi chú chung:
             - **Condition:** User DOES NOT complete any habit on Day N. AND User has NO "Streak Freeze" item.
             - **Result:** Streak resets to 0 on Day N+1.
         - **Scenario 3: Missed Day (With Freeze - Grace Period)**
-            - **Condition:** User DOES NOT complete any habit on Day N. AND User HAS "Streak Freeze" item (Đóng băng chuỗi/Bảo vệ chuỗi).
+            - **Condition:** User DOES NOT complete any habit on Day N. AND User HAS "Streak Freeze" item.
             - **Result:** 1 "Streak Freeze" item consumed. Streak count remains unchanged (preserved).
     - **Streak Freeze Details:**
         - **Cost:** 100 coins per item (Available in Shop).
-        - **Duration/Usage:** One-time use. Each item protects the streak for **one single day**. If a user misses 2 consecutive days, they need 2 Streak Freeze items to preserve the streak.
+        - **Duration/Usage:** One-time use. Each item protects the streak for **one single day**.
 
 - POST /api/users/streak-rewards/claim
   - Mục đích: Claim streak reward milestone
@@ -372,7 +705,98 @@ Ghi chú chung:
     - streak-14: 14 days (2 weeks) = 100 coins
     - streak-28: 28 days (4 weeks) = 200 coins
 
-17) Export Data
+---
+
+## 13) Notifications
+
+- GET /api/notifications
+  - Mục đích: Lấy danh sách notifications
+  - Auth: yes
+
+- POST /api/notifications/mark-read
+  - Mục đích: Đánh dấu đã đọc (single / bulk)
+  - Auth: yes
+
+---
+
+## 14) Settings / Preferences
+
+- GET /api/settings
+  - Mục đích: Lấy user preferences (theme, notifications, time-format,...)
+  - Auth: yes
+  - Response: { settings: { theme, pushNotifications, emailNotifications, timeFormat } }
+
+- PUT /api/settings
+  - Mục đích: Lưu user preferences (theme, time-format, notification settings)
+  - Body: { theme?, pushNotifications?, emailNotifications?, timeFormat? }
+  - Auth: yes
+  - Response: { settings }
+  - Logic: 
+    - pushNotifications: boolean - Enable/disable browser push notifications
+    - emailNotifications: boolean - Enable/disable daily email summary
+    - If emailNotifications is true, system sends daily digest via email
+    - If emailNotifications is false, only in-app notifications are sent
+
+---
+
+## 15) Status / Priority (option sets)
+
+- GET /api/meta/statuses
+  - Mục đích: Lấy option status
+  - Auth: yes
+
+- GET /api/meta/priorities
+  - Mục đích: Lấy option priority
+  - Auth: yes
+
+- (Optional) POST/PUT/DELETE cho chỉnh sửa option nếu user có quyền
+
+---
+
+## 16) AI Analytics / Chat
+
+- POST /api/ai/chat
+  - Mục đích: Chat endpoint (proxy to AI backend)
+  - Body: { message, context? }
+
+- POST /api/ai/analytics
+  - Mục đích: Request analytics/report generation
+  - Body: { startDate, endDate, metrics[] }
+
+---
+
+## 17) Quote of the Day
+
+- GET /api/quotes/today
+  - Mục đích: Lấy quote of the day (hiển thị trên dashboard)
+  - Auth: yes
+  - Response: { quote: string, author: string }
+  - Logic:
+    - **Caching Strategy:** Cache quote trong 24 giờ (reset lúc 00:00 UTC)
+    - **Source:** Fetch từ ZenQuotes.io API (`https://zenquotes.io/api/today`)
+    - **Fallback:** Nếu API fail, trả về 1 trong 10 default quotes hardcoded
+    - **Rate Limiting:** Chỉ call ZenQuotes max 1 lần/ngày (nhờ cache)
+  - **Backend Implementation Notes:**
+    - Use Redis/In-Memory cache với TTL = 24h
+    - Cache key: `quote:today:{YYYY-MM-DD}`
+    - Fetch từ ZenQuotes chỉ khi cache miss
+    - ZenQuotes response format: `[{ "q": "quote text", "a": "author", "h": "html" }]`
+  - **Fallback Quotes (hardcoded):**
+    1. "The only way to do great work is to love what you do." — Steve Jobs
+    2. "Believe you can and you're halfway there." — Theodore Roosevelt
+    3. "Success is not final, failure is not fatal." — Winston Churchill
+    4. "The future belongs to those who believe in their dreams." — Eleanor Roosevelt
+    5. "It does not matter how slowly you go as long as you do not stop." — Confucius
+    6. "Everything you've ever wanted is on the other side of fear." — George Addair
+    7. "Believe in yourself. You are braver than you think." — Unknown
+    8. "I never dreamed about success, I worked for it." — Estée Lauder
+    9. "Do what you can with all you have, wherever you are." — Theodore Roosevelt
+    10. "Small progress is still progress." — Unknown
+
+---
+
+## 18) Export Data
+
 - GET /api/users/export
   - Mục đích: Export toàn bộ dữ liệu của user
   - Auth: yes
@@ -401,252 +825,18 @@ Ghi chú chung:
     - Set response headers để browser download file
     - File name format: flownote-export-YYYY-MM-DD.json
 
-18) Quote of the Day
-- GET /api/quotes/today
-  - Mục đích: Lấy quote of the day (hiển thị trên dashboard)
-  - Auth: yes
-  - Response: { quote: string, author: string }
-  - Logic:
-    - **Caching Strategy:** Cache quote trong 24 giờ (reset lúc 00:00 UTC)
-    - **Source:** Fetch từ ZenQuotes.io API (`https://zenquotes.io/api/today`)
-    - **Fallback:** Nếu API fail, trả về 1 trong 10 default quotes hardcoded
-    - **Rate Limiting:** Chỉ call ZenQuotes max 1 lần/ngày (nhờ cache)
-    - **Response Format:** 
-      ```json
-      {
-        "success": true,
-        "data": {
-          "quote": "The only way to do great work is to love what you do.",
-          "author": "Steve Jobs"
-        }
-      }
-      ```
-  - **Backend Implementation Notes:**
-    - Use Redis/In-Memory cache với TTL = 24h
-    - Cache key: `quote:today:{YYYY-MM-DD}`
-    - Fetch từ ZenQuotes chỉ khi cache miss
-    - ZenQuotes response format: `[{ "q": "quote text", "a": "author", "h": "html" }]`
-  - **Fallback Quotes (hardcoded):**
-    1. "The only way to do great work is to love what you do." — Steve Jobs
-    2. "Believe you can and you're halfway there." — Theodore Roosevelt
-    3. "Success is not final, failure is not fatal." — Winston Churchill
-    4. "The future belongs to those who believe in their dreams." — Eleanor Roosevelt
-    5. "It does not matter how slowly you go as long as you do not stop." — Confucius
-    6. "Everything you've ever wanted is on the other side of fear." — George Addair
-    7. "Believe in yourself. You are braver than you think." — Unknown
-    8. "I never dreamed about success, I worked for it." — Estée Lauder
-    9. "Do what you can with all you have, wherever you are." — Theodore Roosevelt
-    10. "Small progress is still progress." — Unknown
+---
 
-Data models (tóm tắt)
-- Task: { id, taskId, title, status, priority?, dueDate?, tags?, projectId?, createdAt }
-- Project: { id, name, emoji, collapsed }
-- Note: { id, title, content, taskId?, createdAt }
-- Habit: { id, name, icon?, category?: string, reminderTime?: string, completions: Record<string, boolean>, createdAt }
-- User: { id, username, fullName, email, avatarUrl?, coins: number, ownedSkins: string[], activeSkin?: string, claimedRewards: string[], roles?: string[] }
-  - Note: `username` is unique identifier displayed in TopBar and greetings (e.g., "Good morning, @johndoe")
-  - Note: `fullName` is the user's display name
-- ShopItem: { id, name, description, price, type: 'skin' }
-- CalendarEvent: { id, title, startTime, endTime, color?, taskId? }
+## 19) File Upload
 
-Gợi ý implement cho BE Java
-- Sử dụng Spring Boot + Spring Security (JWT) cho auth.
-- Controller per resource (TaskController, ProjectController, AuthController,...).
-- DTOs cho request/response + validation (e.g. dueDate format yyyy-MM-dd).
-- Service layer xử lý business logic, Repository (JPA) cho persistence.
-
-
+- POST /api/uploads
+  - Mục đích: Upload file (avatars, attachments)
+  - Body: form-data file
+  - Response: { url }
 
 ---
 
-## Project Notes / Ghi chú dự án
-
-> **Mục đích dự án**: Đây là dự án để luyện code + thêm vào CV.
-> 
-> **Deployment**: Deploy trên AWS với số lượng người dùng nhỏ (< 100 concurrent users).
->
-> **WebSocket recommendation**: Sử dụng **Socket.IO** vì:
-> - Free và open-source
-> - Dễ integrate với Spring Boot (via `netty-socketio` hoặc `spring-websocket`)
-> - Free tier AWS EC2 (t2.micro) đủ handle ~50-100 concurrent connections
-> - Fallback mechanism khi WebSocket không khả dụng
->
-> **Alternative options**:
-> - AWS API Gateway WebSocket (free tier: 1M messages/tháng)
-> - Pusher (free tier: 200k messages/ngày, 100 concurrent connections)
-
----
-
-## 18) Project Collaboration / Cộng tác dự án
-
-> **Role System**: Chỉ có 2 roles:
-> - **owner**: Tạo project, CRUD project, mời/xóa members
-> - **member**: CRUD tasks trong project (không thể CRUD project)
->
-> Cả owner và member đều có thể xem tất cả tasks của project trong "Tasks" tab.
-
-### Project Member Management
-
-- GET /api/projects/:id/members
-  - Mục đích: Lấy danh sách thành viên của project
-  - Auth: yes (owner hoặc member của project)
-  - Response: { members: ProjectMember[] }
-  - ProjectMember: { id, userId, projectId, role: 'owner' | 'member', user: { id, name, email, avatarUrl }, joinedAt }
-
-- POST /api/projects/:id/invite
-  - Mục đích: Mời thành viên mới vào project (role = member)
-  - Body: { email: string }
-  - Auth: yes (owner only)
-  - Response: { invitation: ProjectInvitation }
-  - Logic:
-    - Kiểm tra email có tồn tại trong hệ thống không
-    - Nếu có: tạo invitation và gửi notification
-    - Nếu không: gửi email invitation link
-    - Token expires sau 7 ngày
-    - Invited user sẽ được assign role "member" khi accept
-
-- DELETE /api/projects/:id/members/:userId
-  - Mục đích: Xóa member khỏi project, hoặc member tự rời
-  - Auth: yes (owner, hoặc user tự rời)
-  - Response: { success: boolean }
-  - Logic: Owner không thể rời project, phải transfer ownership hoặc xóa project
-
-- PUT /api/projects/:id/transfer-ownership
-  - Mục đích: Chuyển quyền owner cho member khác
-  - Body: { newOwnerId: string }
-  - Auth: yes (owner only)
-  - Response: { success: boolean, project: Project }
-  - Logic: Old owner thành member, new owner thành owner
-
-### Project Invitations
-
-- GET /api/users/invitations
-  - Mục đích: Lấy danh sách lời mời đang pending của user hiện tại
-  - Auth: yes
-  - Response: { invitations: ProjectInvitation[] }
-
-- POST /api/invitations/:token/accept
-  - Mục đích: Chấp nhận lời mời (user trở thành member)
-  - Auth: yes
-  - Response: { project: Project }
-
-- POST /api/invitations/:token/decline
-  - Mục đích: Từ chối lời mời
-  - Auth: yes
-  - Response: { success: boolean }
-
-- DELETE /api/projects/:id/invitations/:invitationId
-  - Mục đích: Hủy lời mời đã gửi
-  - Auth: yes (owner only)
-  - Response: { success: boolean }
-
-### Tasks in Shared Projects
-
-- GET /api/tasks?includeShared=true
-  - Mục đích: Lấy tất cả tasks của user (bao gồm tasks từ projects user là member)
-  - Auth: yes
-  - Response: { items: Task[], total }
-  - Logic: Trả về tasks user tạo + tasks từ projects user là owner/member
-
----
-
-## 19) Task Pages (Collaborative Documents) / Trang tài liệu cộng tác
-
-> Cả owner và member đều có full quyền (view, comment, edit) với task pages.
-
-### CRUD Operations
-
-- POST /api/tasks/:taskId/page
-  - Mục đích: Tạo page mới cho task
-  - Body: { title?: string }
-  - Auth: yes (owner hoặc member của project)
-  - Response: { page: TaskPage }
-  - TaskPage: { id, taskId, projectId, title, createdAt, createdBy }
-  - Note: Content sẽ sync qua WebSocket (Y.js), không lưu qua REST API
-
-- GET /api/tasks/:taskId/page
-  - Mục đích: Lấy thông tin page của task
-  - Auth: yes (owner hoặc member của project)
-  - Response: { 
-      page: TaskPage,
-      documentState?: string  // Base64 Y.js document state for initial load
-    }
-
-- PUT /api/pages/:pageId
-  - Mục đích: Update page metadata (title)
-  - Body: { title: string }
-  - Auth: yes (owner hoặc member)
-  - Response: { page: TaskPage }
-
-- DELETE /api/pages/:pageId
-  - Mục đích: Xóa page
-  - Auth: yes (owner only)
-  - Response: { success: boolean }
-  - Note: Cũng xóa tất cả comments liên quan
-
-### Page Comments
-
-> **Inline Comments Feature**: Users can select text in the document and add a comment referencing that specific selection. The `selectionStart` and `selectionEnd` fields store the character positions. When retrieving comments, the frontend uses these positions to:
-> 1. Highlight the referenced text
-> 2. Show the quoted text in the comment
-> 3. Scroll to the text when clicking on a comment
-
-- GET /api/pages/:pageId/comments
-  - Mục đích: Lấy tất cả comments của page
-  - Auth: yes (owner hoặc member)
-  - Query params: 
-    - resolved?: boolean (filter by resolved status)
-    - includeReplies?: boolean (default true)
-  - Response: { comments: PageComment[] }
-  - PageComment structure:
-    ```json
-    {
-      "id": "comment-123",
-      "pageId": "page-1",
-      "userId": "user-2",
-      "user": { "name": "John Doe", "avatarUrl": "..." },
-      "content": "This needs more detail",
-      "selectionStart": 150,  // Character position start (null for general comments)
-      "selectionEnd": 200,    // Character position end (null for general comments)
-      "quotedText": "the selected text",  // Server returns the quoted text for convenience
-      "parentId": null,
-      "resolved": false,
-      "createdAt": 1704931200000,
-      "updatedAt": 1704931200000,
-      "replies": []
-    }
-    ```
-
-- POST /api/pages/:pageId/comments
-  - Mục đích: Tạo comment mới (general hoặc inline)
-  - Body: 
-    ```json
-    {
-      "content": "string (required)",
-      "selectionStart": "number (optional, for inline comments)",
-      "selectionEnd": "number (optional, for inline comments)",
-      "parentId": "string (optional, for replies)"
-    }
-    ```
-  - Auth: yes (owner hoặc member)
-  - Response: { comment: PageComment }
-  - Note: Nếu có selectionStart/selectionEnd, đây là inline comment
-
-- PUT /api/pages/:pageId/comments/:commentId
-  - Mục đích: Cập nhật comment
-  - Body: { content?: string, resolved?: boolean }
-  - Auth: yes (comment owner, hoặc project owner)
-  - Response: { comment: PageComment }
-
-- DELETE /api/pages/:pageId/comments/:commentId
-  - Mục đích: Xóa comment
-  - Auth: yes (comment owner, hoặc project owner)
-  - Response: { success: boolean }
-  - Note: Xóa comment cũng xóa tất cả replies
-
----
-
-## 20) WebSocket Events / Sự kiện WebSocket
+## 20) WebSocket Events
 
 > **Implementation**: Socket.IO với Spring Boot (netty-socketio)
 > 
@@ -694,9 +884,41 @@ Gợi ý implement cho BE Java
 
 ---
 
-## Data Models Update / Cập nhật Data Models
+## Data Models
 
-### New Models
+### Core Models
+
+```
+Task: { 
+  id, taskId, title, status, priority?, dueDate?, tags?, projectId?, 
+  createdAt, createdBy, assigneeId?, lastModifiedBy?, lastModifiedAt?,
+  hasPage: boolean, pageId?: string
+}
+
+Project: { 
+  id, name, emoji, collapsed, ownerId, createdAt 
+}
+
+Note: { id, title, content, taskId?, createdAt }
+
+Habit: { 
+  id, name, icon?, category?: string, reminderTime?: string, 
+  completions: Record<string, boolean>, createdAt 
+}
+
+User: { 
+  id, username, fullName, email, avatarUrl?, coins: number, 
+  ownedSkins: string[], activeSkin?: string, claimedRewards: string[], roles?: string[] 
+}
+- Note: `username` is unique identifier displayed in TopBar and greetings (e.g., "Good morning, @johndoe")
+- Note: `fullName` is the user's display name
+
+ShopItem: { id, name, description, price, type: 'skin' | 'item' }
+
+CalendarEvent: { id, title, startTime, endTime, color?, taskId? }
+```
+
+### Collaboration Models
 
 ```
 ProjectRole: 'owner' | 'member'
@@ -746,41 +968,37 @@ PageComment: {
 }
 ```
 
-### Updated Models
-
-```
-Project (updated): {
-  id: string,
-  name: string,
-  emoji: string,
-  collapsed: boolean,
-  ownerId: string,  // NEW: User who created the project
-  createdAt: timestamp  // NEW
-}
-
-Task (updated): {
-  id: string,
-  taskId: string,
-  title: string,
-  status: string,
-  priority?: string,
-  dueDate?: string,
-  tags?: string[],
-  projectId?: string,
-  createdAt: timestamp,
-  createdBy: string,  // NEW
-  assigneeId?: string,  // NEW
-  lastModifiedBy?: string,  // NEW
-  lastModifiedAt?: timestamp,  // NEW
-  hasPage: boolean,  // NEW: true if task has a TaskPage
-  pageId?: string  // NEW
-}
-```
-
-### Permission Matrix (Simplified)
+### Permission Matrix
 
 | Role   | View Tasks | CRUD Tasks | View Project Members | Invite/Remove Members | CRUD Project |
 |--------|------------|------------|---------------------|----------------------|--------------|
 | owner  | ✓          | ✓          | ✓                   | ✓                    | ✓            |
 | member | ✓          | ✓          | ✓                   | ✗                    | ✗            |
+
+---
+
+## Gợi ý implement cho BE Java
+
+- Sử dụng Spring Boot + Spring Security (JWT) cho auth.
+- Controller per resource (TaskController, ProjectController, AuthController,...).
+- DTOs cho request/response + validation (e.g. dueDate format yyyy-MM-dd).
+- Service layer xử lý business logic, Repository (JPA) cho persistence.
+
+---
+
+## Project Notes / Ghi chú dự án
+
+> **Mục đích dự án**: Đây là dự án để luyện code + thêm vào CV.
+> 
+> **Deployment**: Deploy trên AWS với số lượng người dùng nhỏ (< 100 concurrent users).
+>
+> **WebSocket recommendation**: Sử dụng **Socket.IO** vì:
+> - Free và open-source
+> - Dễ integrate với Spring Boot (via `netty-socketio` hoặc `spring-websocket`)
+> - Free tier AWS EC2 (t2.micro) đủ handle ~50-100 concurrent connections
+> - Fallback mechanism khi WebSocket không khả dụng
+>
+> **Alternative options**:
+> - AWS API Gateway WebSocket (free tier: 1M messages/tháng)
+> - Pusher (free tier: 200k messages/ngày, 100 concurrent connections)
 

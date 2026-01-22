@@ -110,29 +110,42 @@ export interface AppState {
 }
 
 // Task Types
+export interface Subtask {
+  id: string;
+  parentTaskId: string;
+  title: string;
+  status: 'todo' | 'done';
+  sortOrder: number;
+  completedAt?: number;
+  createdAt: number;
+}
+
 export interface Task {
   id: string;
   taskId: string;
   title: string;
+  description?: string;
   status: 'Not started' | 'In progress' | 'Done' | 'Re-surface';
   priority?: 'Low' | 'Medium' | 'High';
   dueDate?: string;
-  tags?: string[];
   projectId?: string;
   createdAt: number;
+  completedAt?: number;
   // Collaboration fields
   createdBy?: string;
   assigneeId?: string;
+  assignee?: { id: string; name: string; avatarUrl?: string };
   lastModifiedBy?: string;
   lastModifiedAt?: number;
-  hasPage?: boolean;
-  pageId?: string;
+  // Subtasks
+  subtasks?: Subtask[];
+  subtaskCount?: number;
+  completedSubtaskCount?: number;
 }
 
 export interface Project {
   id: string;
   name: string;
-  emoji: string;
   collapsed: boolean;
   // Collaboration fields
   ownerId?: string;

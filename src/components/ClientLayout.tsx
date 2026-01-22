@@ -15,9 +15,21 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const authPages = ['/login', '/register', '/forgot-password'];
   const isAuthPage = authPages.includes(pathname);
 
+  // Fullscreen pages (document editor)
+  const isDocumentPage = pathname.startsWith('/page/');
+
   if (isAuthPage) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-100 via-purple-50 to-pink-100 dark:from-[#1A1A2E] dark:via-[#16162A] dark:to-[#1A1A2E]">
+        {children}
+      </div>
+    );
+  }
+
+  // Fullscreen mode for document pages
+  if (isDocumentPage) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-[#1A1A2E]">
         {children}
       </div>
     );

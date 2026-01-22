@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, User, Settings, LogOut, Search, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import { Bell, User, Settings, LogOut, Search, ChevronDown } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -79,18 +79,13 @@ export default function TopBar() {
     <div className="h-16 bg-white dark:bg-[#1A1A2E] flex items-center justify-between px-6 border-b border-gray-100 dark:border-gray-700">
       {/* Search Bar - Center */}
       <div className="flex-1 max-w-2xl mx-auto">
-        <div className="relative flex items-center gap-2">
-          <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full pl-12 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-            />
-          </div>
-          <button className="p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <SlidersHorizontal size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search..."
+            className="w-full pl-12 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+          />
         </div>
       </div>
 

@@ -49,7 +49,7 @@ export default function Home() {
     completed: 0,
     missed: 0,
     total: 0,
-    currentStreak: 0,
+    currentStreak: 8, // MOCK: Set to 8 for testing streak rewards
   });
 
   // Get greeting based on time of day

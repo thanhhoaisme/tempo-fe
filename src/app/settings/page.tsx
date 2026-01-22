@@ -28,7 +28,7 @@ export default function SettingsPage() {
           { id: 'task-2', title: 'Sample Task 2', status: 'done', priority: 'medium', createdAt: '2026-01-02T14:30:00Z' }
         ],
         projects: [
-          { id: 'proj-1', name: 'My Project', emoji: '📁', collapsed: false }
+          { id: 'proj-1', name: 'My Project', collapsed: false }
         ],
         notes: [
           { id: 'note-1', title: 'Sample Note', content: 'This is a sample note content.', createdAt: '2026-01-05T09:00:00Z' }

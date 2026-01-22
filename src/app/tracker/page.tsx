@@ -7,6 +7,8 @@ import ConfirmDialog from '@/components/features/ConfirmDialog';
 import { useApp } from '@/context/AppContext';
 import { Task, Project, ProjectMember, ProjectInvitation } from '@/types';
 import { ProjectMembersModal } from '@/components/features/collaboration';
+import TaskDetailPanel from '@/components/TaskDetailPanel';
+import SimpleTaskRow from '@/components/SimpleTaskRow';
 
 export default function TrackerPage() {
   const { tasks: contextTasks, projects: contextProjects, setTasks: setContextTasks, setProjects: setContextProjects } = useApp();
@@ -15,8 +17,8 @@ export default function TrackerPage() {
 
   // Default data for first load
   const defaultProjects: Project[] = [
-    { id: 'p1', name: '.SNEAKERS', emoji: '😊', collapsed: false },
-    { id: 'p2', name: 'IELTS', emoji: '🔥', collapsed: false },
+    { id: 'p1', name: '.SNEAKERS', collapsed: false },
+    { id: 'p2', name: 'IELTS', collapsed: false },
   ];
 
   const defaultTasks: Task[] = [
@@ -112,6 +114,7 @@ export default function TrackerPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<{ id: string; value: string; original: string } | null>(null);
+  const [selectedTaskForPanel, setSelectedTaskForPanel] = useState<string | null>(null);
 
   // Collaboration state
   const [showMembersModal, setShowMembersModal] = useState<string | null>(null); // projectId or null
@@ -144,7 +147,6 @@ export default function TrackerPage() {
     const newProject: Project = {
       id: `p${Date.now()}`,
       name: newProjectName,
-      emoji: '⭕',
       collapsed: false,
     };
     setProjects([...projects, newProject]);
@@ -304,368 +306,6 @@ export default function TrackerPage() {
 
   const emojis = ['😊', '🔥', '📚', '💼', '🎯', '⚡', '🌟', '🚀', '💡', '🎨', '🏆', '📱', '💻', '🎮', '🎵', '🎬', '📷', '🍕', '☕', '🌈'];
 
-  const TaskRow = ({ task, showProject }: { task: Task; showProject?: boolean }) => {
-    const priorityRef = useRef<HTMLTableDataCellElement>(null);
-    const dateRef = useRef<HTMLTableDataCellElement>(null);
-    const projectRef = useRef<HTMLTableDataCellElement>(null);
-    const statusRef = useRef<HTMLTableDataCellElement>(null);
-
-    useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-        const target = event.target as Node;
-        const insideStatus = statusRef.current?.contains(target);
-        const insidePriority = priorityRef.current?.contains(target);
-        const insideDate = dateRef.current?.contains(target);
-        const insideProject = projectRef.current?.contains(target);
-
-        if (!insideStatus && !insidePriority && !insideDate && !insideProject) {
-          setOpenDropdown(null);
-          setDateDraft(null);
-        }
-      };
-
-      const handleEscape = (event: KeyboardEvent) => {
-        if (event.key === 'Escape') {
-          setOpenDropdown(null);
-          setDateDraft(null);
-        }
-      };
-
-      // Use 'click' instead of 'mousedown' to allow onClick handlers to fire first
-      document.addEventListener('click', handleClickOutside);
-      document.addEventListener('keydown', handleEscape);
-      return () => {
-        document.removeEventListener('click', handleClickOutside);
-        document.removeEventListener('keydown', handleEscape);
-      };
-    }, []);
-
-    return (
-      <tr
-        className={`transition-colors border-b border-gray-300 dark:border-gray-700 ${selectedRow === task.id ? 'bg-violet-50 dark:bg-violet-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/30'
-          }`}
-      >
-        <td
-          className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 cursor-pointer"
-          onClick={() => setSelectedRow(selectedRow === task.id ? null : task.id)}
-        >
-          <span className="text-sm font-mono text-gray-600 dark:text-gray-400">{task.taskId}</span>
-        </td>
-        <td
-          className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 cursor-pointer"
-          onClick={() => {
-            if (editingTitle?.id !== task.id) setEditingTitle({ id: task.id, value: task.title, original: task.title });
-          }}
-        >
-          {editingTitle?.id === task.id ? (
-            <input
-              type="text"
-              value={editingTitle.value}
-              onChange={(e) => setEditingTitle({ id: task.id, value: e.target.value, original: editingTitle.original })}
-              onBlur={saveTitle}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') saveTitle();
-                if (e.key === 'Escape') setEditingTitle(null);
-              }}
-              autoFocus
-              className="w-full px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 text-sm text-gray-900 dark:text-white"
-            />
-          ) : (
-            <span className="text-sm text-gray-900 dark:text-white truncate" title={task.title}>{task.title}</span>
-          )}
-        </td>
-        <td
-          className="px-4 py-3 relative border-r border-gray-300 dark:border-gray-600 cursor-pointer"
-          ref={statusRef}
-          onClick={(e) => {
-            if (e.target === e.currentTarget || (e.target as HTMLElement).closest('span')) {
-              setOpenDropdown(openDropdown?.taskId === task.id && openDropdown?.type === 'status' ? null : { taskId: task.id, type: 'status' });
-            }
-          }}
-        >
-          <span
-            className="text-xs px-3 py-1.5 rounded-md font-medium inline-block text-white"
-            style={{ backgroundColor: getStatusColor(task.status) }}
-          >
-            {task.status}
-          </span>
-          {openDropdown?.taskId === task.id && openDropdown?.type === 'status' && (
-            <div className="absolute z-50 mt-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-300 dark:border-gray-600 p-1">
-              {statusOptions.map((statusOpt) => (
-                <button
-                  key={statusOpt.name}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    updateTask(task.id, { status: statusOpt.name as Task['status'] }, 'Status updated');
-                    setOpenDropdown(null);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-xs font-medium rounded transition-colors flex items-center gap-2 ${getStatusBgColor(statusOpt.name as Task['status'])} ${getStatusTextColor(statusOpt.name as Task['status'])} hover:opacity-80`}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: statusColorMap[statusOpt.color as keyof typeof statusColorMap] }}
-                  ></span>
-                  {statusOpt.name}
-                </button>
-              ))}
-              <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  console.log('Edit property clicked, setting showEditProperty to status');
-                  setShowEditProperty('status');
-                  setOpenDropdown(null);
-                }}
-                className="w-full text-left px-3 py-2 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded flex items-center gap-2"
-              >
-                <Gear size={12} />
-                Edit property
-              </button>
-            </div>
-          )}
-        </td>
-        <td
-          className="px-4 py-3 relative border-r border-gray-300 dark:border-gray-600 cursor-pointer"
-          ref={priorityRef}
-          onClick={(e) => {
-            if (e.target === e.currentTarget || (e.target as HTMLElement).closest('span')) {
-              setOpenDropdown(openDropdown?.taskId === task.id && openDropdown?.type === 'priority' ? null : { taskId: task.id, type: 'priority' });
-            }
-          }}
-        >
-          {task.priority ? (
-            <span className={`text-xs px-3 py-1.5 rounded-md font-medium inline-block text-white ${getPriorityBadgeColor(task.priority)}`}>
-              {task.priority}
-            </span>
-          ) : (
-            <span className="text-sm text-gray-400">Add priority</span>
-          )}
-          {openDropdown?.taskId === task.id && openDropdown?.type === 'priority' && (
-            <div className="absolute z-50 mt-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-300 dark:border-gray-600 p-2">
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 px-2">Select an option</div>
-              {['Low', 'Medium', 'High'].map((p) => (
-                <button
-                  key={p}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    updateTask(task.id, { priority: p as Task['priority'] }, 'Priority updated');
-                    setOpenDropdown(null);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-xs font-medium rounded hover:opacity-80 transition-opacity flex items-center gap-2 ${getPriorityBadgeColor(p as Task['priority'])} text-white mb-1`}
-                >
-                  {p}
-                </button>
-              ))}
-              {task.priority && (
-                <>
-                  <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      updateTask(task.id, { priority: undefined }, 'Priority cleared');
-                      setOpenDropdown(null);
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-red-500 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
-                  >
-                    Clear priority
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </td>
-        <td
-          className="px-4 py-3 relative border-r border-gray-300 dark:border-gray-600 cursor-pointer"
-          ref={dateRef}
-          onClick={() => {
-            setDateDraft({ taskId: task.id, value: task.dueDate || '' });
-            setOpenDropdown(openDropdown?.taskId === task.id && openDropdown?.type === 'date' ? null : { taskId: task.id, type: 'date' });
-          }}
-        >
-          {task.dueDate ? (
-            <span className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-200">
-              <CalendarBlank size={14} />
-              {task.dueDate}
-            </span>
-          ) : (
-            <span className="text-sm text-gray-400">Add date</span>
-          )}
-          {openDropdown?.taskId === task.id && openDropdown?.type === 'date' && (
-            <div className="absolute z-50 mt-2 w-72 bg-white dark:bg-gray-900 text-gray-900 dark:text-white rounded-lg shadow-lg p-4 border border-gray-300 dark:border-gray-600 space-y-3">
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                <span>Pick a date</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(null);
-                    setDateDraft(null);
-                  }}
-                  className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                >
-                  Close
-                </button>
-              </div>
-              <input
-                type="text"
-                autoFocus
-                placeholder="YYYY-MM-DD"
-                maxLength={10}
-                value={dateDraft?.taskId === task.id ? dateDraft?.value : task.dueDate || ''}
-                onChange={(e) => {
-                  let value = e.target.value.replace(/[^\d]/g, ''); // Chỉ giữ số
-
-                  // Tự động thêm dấu -
-                  if (value.length >= 4) {
-                    value = value.slice(0, 4) + '-' + value.slice(4);
-                  }
-                  if (value.length >= 7) {
-                    value = value.slice(0, 7) + '-' + value.slice(7);
-                  }
-                  if (value.length > 10) {
-                    value = value.slice(0, 10);
-                  }
-
-                  setDateDraft({ taskId: task.id, value });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const value = dateDraft?.value || '';
-                    if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                      // Kiểm tra ngày hợp lệ
-                      const [year, month, day] = value.split('-').map(Number);
-                      const date = new Date(year, month - 1, day);
-
-                      if (date.getFullYear() === year &&
-                        date.getMonth() === month - 1 &&
-                        date.getDate() === day) {
-                        updateTask(task.id, { dueDate: value }, 'Due date updated');
-                        setOpenDropdown(null);
-                        setDateDraft(null);
-                      } else {
-                        setToast({ message: 'Invalid date! Please check month (01-12) and day (01-31).', type: 'error' });
-                      }
-                    }
-                  }
-                  if (e.key === 'Escape') {
-                    setOpenDropdown(null);
-                    setDateDraft(null);
-                  }
-                }}
-                className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-violet-500 focus:outline-none"
-              />
-              <div className="flex justify-between text-sm">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    updateTask(task.id, { dueDate: undefined }, 'Due date cleared');
-                    setDateDraft(null);
-                    setOpenDropdown(null);
-                  }}
-                  className="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300"
-                >
-                  Clear
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const value = dateDraft?.value || '';
-                    if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                      // Kiểm tra ngày hợp lệ
-                      const [year, month, day] = value.split('-').map(Number);
-                      const date = new Date(year, month - 1, day);
-
-                      if (date.getFullYear() === year &&
-                        date.getMonth() === month - 1 &&
-                        date.getDate() === day) {
-                        updateTask(task.id, { dueDate: value }, 'Due date updated');
-                        setOpenDropdown(null);
-                        setDateDraft(null);
-                      } else {
-                        setToast({ message: 'Invalid date! Please check month (01-12) and day (01-31).', type: 'error' });
-                      }
-                    }
-                  }}
-                  className="text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 font-medium"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          )}
-        </td>
-        {showProject && (
-          <td
-            className="px-4 py-3 relative border-r border-gray-300 dark:border-gray-600 cursor-pointer"
-            ref={projectRef}
-            onClick={(e) => {
-              if (e.target === e.currentTarget || (e.target as HTMLElement).closest('span')) {
-                setOpenDropdown(openDropdown?.taskId === task.id && openDropdown?.type === 'project' ? null : { taskId: task.id, type: 'project' });
-              }
-            }}
-          >
-            {task.projectId ? (
-              <span className="text-sm text-gray-900 dark:text-white">
-                {projects.find(p => p.id === task.projectId)?.name}
-              </span>
-            ) : (
-              <span className="text-sm text-gray-400">Add to project</span>
-            )}
-            {openDropdown?.taskId === task.id && openDropdown?.type === 'project' && (
-              <div className="absolute z-50 mt-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border-2 border-gray-300 dark:border-gray-600 p-2">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 px-2">Select project</div>
-                {projects.map((proj) => (
-                  <button
-                    key={proj.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      updateTask(task.id, { projectId: proj.id }, 'Project updated');
-                      setOpenDropdown(null);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white"
-                  >
-                    {proj.name}
-                  </button>
-                ))}
-                {task.projectId && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      updateTask(task.id, { projectId: undefined }, 'Removed from project');
-                      setOpenDropdown(null);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-red-500 dark:text-red-400 mt-1"
-                  >
-                    Remove from project
-                  </button>
-                )}
-              </div>
-            )}
-          </td>
-        )}
-        <td className="px-4 py-3 text-center">
-          <div className="flex items-center justify-center gap-2">
-            {/* Open Page Button */}
-            <button
-              onClick={() => window.open(`/page/${task.id}`, '_blank')}
-              className="group p-2.5 text-gray-400 hover:text-white hover:bg-purple-500 dark:hover:bg-purple-600 transition-all duration-300 cursor-pointer relative rounded-lg hover:shadow-lg hover:scale-110 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-purple-500"
-              title="Open document page"
-            >
-              <FileText size={20} weight="duotone" />
-            </button>
-            {/* Delete Button */}
-            <button
-              onClick={() => deleteTask(task.id)}
-              className="group p-2.5 text-gray-400 hover:text-white hover:bg-red-500 dark:hover:bg-red-600 transition-all duration-300 cursor-pointer relative rounded-lg hover:shadow-lg hover:scale-110 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-red-500"
-              title="Delete task"
-            >
-              <TrashSimple size={20} weight="duotone" className="block group-hover:hidden" />
-              <Trash size={20} weight="duotone" className="hidden group-hover:block" />
-            </button>
-          </div>
-        </td>
-      </tr>
-    );
-  };
 
   return (
     <>
@@ -1030,22 +670,34 @@ export default function TrackerPage() {
                 <thead className="bg-gray-50 dark:bg-gray-800/30">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Task ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Tasks</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Task</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Status</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Priority</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Due</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Assignee</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Project</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tasks.map(task => (
-                    <TaskRow key={task.id} task={task} showProject={true} />
+                    <SimpleTaskRow
+                      key={task.id}
+                      task={task}
+                      isSelected={selectedTaskForPanel === task.id}
+                      onRowClick={() => setSelectedTaskForPanel(task.id)}
+                      onOpenPage={() => window.open(`/page/${task.id}?title=${encodeURIComponent(task.title)}`, '_blank')}
+                      onDelete={() => deleteTask(task.id)}
+                      getStatusColor={getStatusColor}
+                      getPriorityBadgeColor={getPriorityBadgeColor}
+                      projects={projects}
+                      showProject={true}
+                    />
                   ))}
                   {addingTaskTo === 'all' && (
                     <tr className="border-b border-gray-300 dark:border-gray-600">
                       <td className="px-4 py-3"></td>
-                      <td className="px-4 py-3" colSpan={5}>
+                      <td className="px-4 py-3" colSpan={6}>
                         <input
                           type="text"
                           value={newTaskTitle}
@@ -1122,21 +774,33 @@ export default function TrackerPage() {
                           <thead className="bg-gray-50 dark:bg-gray-800/30">
                             <tr>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Task ID</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Tasks</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Task</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Status</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Priority</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Due</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Assignee</th>
                               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
                             {projectTasks.map(task => (
-                              <TaskRow key={task.id} task={task} showProject={false} />
+                              <SimpleTaskRow
+                                key={task.id}
+                                task={task}
+                                isSelected={selectedTaskForPanel === task.id}
+                                onRowClick={() => setSelectedTaskForPanel(task.id)}
+                                onOpenPage={() => window.open(`/page/${task.id}?title=${encodeURIComponent(task.title)}`, '_blank')}
+                                onDelete={() => deleteTask(task.id)}
+                                getStatusColor={getStatusColor}
+                                getPriorityBadgeColor={getPriorityBadgeColor}
+                                projects={projects}
+                                showProject={false}
+                              />
                             ))}
                             {addingTaskTo === project.id && (
                               <tr className="border-b border-gray-300 dark:border-gray-600">
                                 <td className="px-4 py-3"></td>
-                                <td className="px-4 py-3" colSpan={4}>
+                                <td className="px-4 py-3" colSpan={5}>
                                   <input
                                     type="text"
                                     value={newTaskTitle}
@@ -1206,6 +870,23 @@ export default function TrackerPage() {
           }}
         />
       )}
+
+      {selectedTaskForPanel && (() => {
+        const task = contextTasks.find(t => t.id === selectedTaskForPanel);
+        // Also check project tasks if not found in context (though context should have all)
+        // For now contextTasks seems to be the source
+        if (!task) return null;
+        return (
+          <TaskDetailPanel
+            task={task}
+            projects={contextProjects}
+            onClose={() => setSelectedTaskForPanel(null)}
+            onUpdateTask={updateTask}
+            getMockMembers={getMockMembers}
+            currentUserId="user-1"
+          />
+        );
+      })()}
     </>
   );
 }
